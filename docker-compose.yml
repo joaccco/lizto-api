@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lizto_postgres
+    environment:
+      POSTGRES_DB: lizto
+      POSTGRES_USER: lizto
+      POSTGRES_PASSWORD: lizto
+    ports:
+      - "5432:5432"
+    volumes:
+      - lizto_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: lizto_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - lizto_redis_data:/data
+
+volumes:
+  lizto_postgres_data:
+  lizto_redis_data:
