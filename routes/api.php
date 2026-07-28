@@ -27,4 +27,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         });
     });
 
+    // Catálogo — público
+    Route::get('/categories', [\App\Http\Controllers\Api\V1\Providers\CategoryController::class, 'index'])->name('categories.index');
+    Route::get('/providers', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'index'])->name('providers.index');
+    Route::get('/providers/{uuid}', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'show'])->name('providers.show');
+
 });
