@@ -18,7 +18,12 @@ class StageOneFoundationTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected bool $seed = true;
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed();
+    }
 
     public function test_expected_categories_are_seeded(): void
     {
@@ -72,8 +77,8 @@ class StageOneFoundationTest extends TestCase
     public function test_spatie_roles_and_permissions_work_with_user_model(): void
     {
         $user = UserModel::where('email', 'juan@test.com')->firstOrFail();
-        $role = Role::create(['name' => 'client']);
-        $permission = Permission::create(['name' => 'requests.create']);
+        $role = Role::firstOrCreate(['name' => 'client', 'guard_name' => 'web']);
+        $permission = Permission::firstOrCreate(['name' => 'requests.create', 'guard_name' => 'web']);
 
         $role->givePermissionTo($permission);
         $user->assignRole($role);
