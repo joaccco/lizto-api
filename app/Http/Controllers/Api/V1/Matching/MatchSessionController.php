@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1\Matching;
 
 use App\Application\Matching\Actions\RunMatchingAction;
+use App\Domain\Matching\Enums\CardStatus;
+use App\Domain\ServiceRequests\Enums\RequestStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MatchCardResource;
 use App\Http\Resources\MatchSessionResource;
@@ -62,77 +64,102 @@ class MatchSessionController extends Controller
 
     public function accept(Request $request, string $uuid, int $cardId): JsonResponse
     {
-        $user = $request->user();
+        $session = MatchSessionModel::where('uuid', $uuid)
+            ->firstOrFail();
 
-        $session = MatchSessionModel::where('uuid', $uuid)->firstOrFail();
-        if ($session->serviceRequest->client_id !== $user->id) {
-            abort(403, 'Unauthorized access to session.');
+        $serviceRequest = $session->serviceRequest()->firstOrFail();
+
+        if ($serviceRequest->client_id !== $request->user()->id) {
+            return response()->json(['message' => 'No autorizado.'], 403);
         }
 
-        $card = MatchCardModel::where('match_session_id', $session->id)
-            ->where('id', $cardId)
+        $card = MatchCardModel::where('id', $cardId)
+            ->where('match_session_id', $session->id)
             ->firstOrFail();
 
         $card->update([
-            'card_status' => 'accepted',
-            'shown_at' => $card->shown_at ?? now(),
-            'decided_at' => now(),
+            'card_status' => CardStatus::Accepted->value,
+            'shown_at'    => $card->shown_at ?? now(),
+            'decided_at'  => now(),
         ]);
 
         $session->increment('total_shown');
-        $session->serviceRequest->update(['status' => 'provider_selected']);
 
-        $card->load('provider.user');
+        $serviceRequest->update([
+            'status' => RequestStatus::ProviderSelected->value,
+        ]);
 
         return response()->json([
-            'data' => (new MatchCardResource($card))->resolve(),
-            'message' => 'Tarjeta aceptada.',
-        ], 200);
+            'data' => [
+                'card_id'     => $card->id,
+                'card_status' => $card->card_status,
+                'provider_id' => $card->provider_id,
+                'decided_at'  => $card->decided_at,
+            ],
+            'message' => 'Profesional seleccionado correctamente.',
+        ]);
     }
 
     public function reject(Request $request, string $uuid, int $cardId): JsonResponse
     {
-        $user = $request->user();
-
-        $session = MatchSessionModel::where('uuid', $uuid)->firstOrFail();
-        if ($session->serviceRequest->client_id !== $user->id) {
-            abort(403, 'Unauthorized access to session.');
-        }
-
-        $card = MatchCardModel::where('match_session_id', $session->id)
-            ->where('id', $cardId)
+        $session = MatchSessionModel::where('uuid', $uuid)
             ->firstOrFail();
 
+        $serviceRequest = $session->serviceRequest()->firstOrFail();
+
+        if ($serviceRequest->client_id !== $request->user()->id) {
+            return response()->json(['message' => 'No autorizado.'], 403);
+        }
+
+        $card = MatchCardModel::where('id', $cardId)
+            ->where('match_session_id', $session->id)
+            ->first();
+
+        if (!$card) {
+            return response()->json([
+                'message' => 'Card no encontrada.',
+                'data'    => null,
+            ], 404);
+        }
+
         $card->update([
-            'card_status' => 'rejected',
-            'decided_at' => now(),
+            'card_status' => CardStatus::Rejected->value,
+            'decided_at'  => now(),
         ]);
 
         $session->increment('total_shown');
 
         $nextCard = MatchCardModel::where('match_session_id', $session->id)
-            ->where('card_status', 'pending')
+            ->where('card_status', CardStatus::Pending->value)
             ->orderBy('rank_position')
-            ->with('provider.user')
             ->first();
 
         return response()->json([
             'data' => [
                 'rejected_card_id' => $card->id,
-                'next_card' => $nextCard ? (new MatchCardResource($nextCard))->resolve() : null,
+                'next_card'        => $nextCard ? [
+                    'card_id'       => $nextCard->id,
+                    'rank_position' => $nextCard->rank_position,
+                    'provider_id'   => $nextCard->provider_id,
+                    'score_total'   => $nextCard->score_total,
+                    'snapshot'      => $nextCard->snapshot,
+                ] : null,
+                'has_more' => $nextCard !== null,
             ],
-            'message' => 'Tarjeta rechazada.',
-        ], 200);
+            'message' => $nextCard
+                ? 'Card descartada.'
+                : 'No hay más profesionales disponibles.',
+        ]);
     }
 
     public function recover(Request $request, string $uuid, int $cardId): JsonResponse
     {
-        $user = $request->user();
-
-        $session = MatchSessionModel::where('uuid', $uuid)->firstOrFail();
-        if ($session->serviceRequest->client_id !== $user->id) {
-            abort(403, 'Unauthorized access to session.');
-        }
+        $session = MatchSessionModel::where('uuid', $uuid)
+            ->whereHas('serviceRequest', function ($q) use ($request) {
+                $q->where('client_id', $request->user()->id);
+            })
+            ->with(['serviceRequest', 'cards'])
+            ->firstOrFail();
 
         $card = MatchCardModel::where('match_session_id', $session->id)
             ->where('id', $cardId)
@@ -148,14 +175,12 @@ class MatchSessionController extends Controller
 
         $card->update([
             'card_status' => 'recovered',
-            'decided_at' => null,
+            'decided_at'  => null,
         ]);
 
-        $card->load('provider.user');
-
         return response()->json([
-            'data' => (new MatchCardResource($card))->resolve(),
+            'data' => new MatchCardResource($card->load('provider.user')),
             'message' => 'Tarjeta recuperada.',
-        ], 200);
+        ]);
     }
 }

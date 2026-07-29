@@ -11,10 +11,62 @@ use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
 use App\Infrastructure\Persistence\Eloquent\SurveyQuestionModel;
 use App\Infrastructure\Persistence\Eloquent\SurveyResponseModel;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class ServiceRequestController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $requests = ServiceRequestModel::where('client_id', $user->id)
+            ->with([
+                'category',
+                'matchSession.cards' => function ($q) {
+                    $q->where('card_status', 'accepted')->with('provider.user');
+                },
+            ])
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        $items = collect($requests->items())->map(function ($sr) {
+            $acceptedCard = $sr->matchSession?->cards->first();
+            $provider = $acceptedCard?->provider;
+            $providerUser = $provider?->user;
+            $snapshot = $acceptedCard?->snapshot ?? [];
+
+            return [
+                'uuid' => $sr->uuid,
+                'raw_prompt' => Str::limit($sr->raw_prompt, 60),
+                'full_prompt' => $sr->raw_prompt,
+                'status' => $sr->status instanceof \BackedEnum ? $sr->status->value : $sr->status,
+                'urgency' => $sr->urgency instanceof \BackedEnum ? $sr->urgency->value : $sr->urgency,
+                'category' => $sr->category ? [
+                    'name' => $sr->category->name,
+                    'slug' => $sr->category->slug,
+                    'icon' => $sr->category->icon,
+                ] : null,
+                'accepted_provider' => $provider ? [
+                    'name' => $providerUser?->name ?? 'Proveedor',
+                    'avg_rating' => (float) ($snapshot['avg_rating'] ?? $provider->avg_rating ?? 5.0),
+                    'avatar_url' => $providerUser?->avatar_url,
+                ] : null,
+                'created_at' => $sr->created_at?->toISOString(),
+            ];
+        });
+
+        return response()->json([
+            'data' => $items,
+            'meta' => [
+                'current_page' => $requests->currentPage(),
+                'per_page' => $requests->perPage(),
+                'total' => $requests->total(),
+                'last_page' => $requests->lastPage(),
+            ],
+        ]);
+    }
+
     public function store(CreateServiceRequestRequest $request): JsonResponse
     {
         $user = $request->user();
@@ -70,7 +122,11 @@ class ServiceRequestController extends Controller
         $answers = $request->input('answers', []);
         $structuredData = [];
 
-        foreach ($answers as $answer) {
+        foreach ($request->answers as $answer) {
+            if (empty($answer['answer_value'])) {
+                continue;
+            }
+
             $question = null;
             if (!empty($answer['question_id'])) {
                 $question = SurveyQuestionModel::find($answer['question_id']);
@@ -81,10 +137,11 @@ class ServiceRequestController extends Controller
 
             SurveyResponseModel::create([
                 'service_request_id' => $serviceRequest->id,
-                'question_id' => $question?->id,
-                'question_key' => $answer['question_key'],
-                'question_text' => $answer['question_text'],
-                'answer_value' => $answer['answer_value'],
+                'question_id'        => $question?->id,
+                'question_key'       => $answer['question_key'],
+                'question_text'      => $answer['question_text'],
+                'answer_value'       => $answer['answer_value'],
+                'is_ai_generated'    => $answer['is_ai_generated'] ?? false,
             ]);
 
             $structuredData[$answer['question_key']] = $answer['answer_value'];
@@ -103,5 +160,18 @@ class ServiceRequestController extends Controller
             ],
             'message' => 'Encuesta completada.',
         ], 200);
+    }
+
+    public function cleanup(Request $request): JsonResponse
+    {
+        $deleted = ServiceRequestModel::where('client_id', $request->user()->id)
+            ->whereIn('status', ['pending_survey', 'pending_matching'])
+            ->where('created_at', '<', now()->subHour())
+            ->delete();
+
+        return response()->json([
+            'data'    => ['deleted' => $deleted],
+            'message' => "{$deleted} solicitudes eliminadas.",
+        ]);
     }
 }

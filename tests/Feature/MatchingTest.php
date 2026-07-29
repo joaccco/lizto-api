@@ -134,7 +134,7 @@ class MatchingTest extends TestCase
         $acceptResponse->assertStatus(200)
             ->assertJsonPath('data.card_id', $cardId)
             ->assertJsonPath('data.card_status', 'accepted')
-            ->assertJsonPath('message', 'Tarjeta aceptada.');
+            ->assertJsonPath('message', 'Profesional seleccionado correctamente.');
 
         $this->assertDatabaseHas('service_requests', [
             'uuid' => $requestId,
@@ -165,7 +165,7 @@ class MatchingTest extends TestCase
 
         $rejectResponse->assertStatus(200)
             ->assertJsonPath('data.rejected_card_id', $cardId)
-            ->assertJsonPath('message', 'Tarjeta rechazada.');
+            ->assertJsonPath('message', 'Card descartada.');
 
         $this->assertDatabaseHas('match_cards', [
             'id' => $cardId,

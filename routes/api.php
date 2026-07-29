@@ -40,8 +40,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     // Rutas protegidas (auth:sanctum)
     Route::middleware('auth:sanctum')->group(function () {
         // Service Requests
+        Route::get('/requests', [ServiceRequestController::class, 'index'])->name('requests.index');
         Route::post('/requests', [ServiceRequestController::class, 'store'])->name('requests.store');
         Route::post('/requests/{uuid}/survey', [ServiceRequestController::class, 'survey'])->name('requests.survey');
+        Route::delete('/requests/cleanup', [ServiceRequestController::class, 'cleanup'])->name('requests.cleanup');
 
         // Matching Engine
         Route::post('/requests/{uuid}/match', [MatchSessionController::class, 'createSession'])->name('requests.match');
