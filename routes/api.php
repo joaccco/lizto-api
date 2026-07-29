@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Auth\ProfileController;
+use App\Http\Controllers\Api\V1\ServiceRequests\ServiceRequestController;
+use App\Http\Controllers\Api\V1\Matching\MatchSessionController;
 
 Route::prefix('v1')->name('api.v1.')->group(function () {
 
@@ -34,5 +36,18 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
     // Parser de solicitudes — público
     Route::post('/requests/parse', [\App\Http\Controllers\Api\V1\ServiceRequests\ParseRequestController::class, 'parse'])->name('requests.parse');
+
+    // Rutas protegidas (auth:sanctum)
+    Route::middleware('auth:sanctum')->group(function () {
+        // Service Requests
+        Route::post('/requests', [ServiceRequestController::class, 'store'])->name('requests.store');
+        Route::post('/requests/{uuid}/survey', [ServiceRequestController::class, 'survey'])->name('requests.survey');
+
+        // Matching Engine
+        Route::post('/requests/{uuid}/match', [MatchSessionController::class, 'createSession'])->name('requests.match');
+        Route::post('/match-sessions/{uuid}/cards/{cardId}/accept', [MatchSessionController::class, 'accept'])->name('match-sessions.cards.accept');
+        Route::post('/match-sessions/{uuid}/cards/{cardId}/reject', [MatchSessionController::class, 'reject'])->name('match-sessions.cards.reject');
+        Route::post('/match-sessions/{uuid}/cards/{cardId}/recover', [MatchSessionController::class, 'recover'])->name('match-sessions.cards.recover');
+    });
 
 });
