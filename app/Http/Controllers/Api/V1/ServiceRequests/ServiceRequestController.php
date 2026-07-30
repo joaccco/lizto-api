@@ -20,15 +20,26 @@ class ServiceRequestController extends Controller
     {
         $user = $request->user();
 
-        $requests = ServiceRequestModel::where('client_id', $user->id)
+        $query = ServiceRequestModel::where('client_id', $user->id)
             ->with([
                 'category',
                 'matchSession.cards' => function ($q) {
                     $q->where('card_status', 'accepted')->with('provider.user');
                 },
-            ])
-            ->orderByDesc('created_at')
-            ->paginate(10);
+            ]);
+
+        if ($request->query('status') === 'active') {
+            $query->whereIn('status', [
+                'provider_selected',
+                'pending_confirmation',
+                'confirmed',
+                'in_progress',
+                'pending_completion',
+            ]);
+        }
+
+        $limit = (int) $request->query('limit', 10);
+        $requests = $query->orderByDesc('created_at')->paginate($limit);
 
         $items = collect($requests->items())->map(function ($sr) {
             $acceptedCard = $sr->matchSession?->cards->first();

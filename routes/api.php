@@ -50,6 +50,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/match-sessions/{uuid}/cards/{cardId}/accept', [MatchSessionController::class, 'accept'])->name('match-sessions.cards.accept');
         Route::post('/match-sessions/{uuid}/cards/{cardId}/reject', [MatchSessionController::class, 'reject'])->name('match-sessions.cards.reject');
         Route::post('/match-sessions/{uuid}/cards/{cardId}/recover', [MatchSessionController::class, 'recover'])->name('match-sessions.cards.recover');
+
+        // Works
+        Route::post('/works/{id}/complete', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'complete'])->name('works.complete');
     });
 
 });

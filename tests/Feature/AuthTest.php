@@ -126,6 +126,12 @@ class AuthTest extends TestCase
         $response->assertStatus(401);
     }
 
+    public function test_unauthenticated_plain_request_returns_401_without_redirect_error(): void
+    {
+        $response = $this->get('/api/v1/requests');
+        $response->assertStatus(401);
+    }
+
     public function test_user_can_logout(): void
     {
         $register = $this->postJson('/api/v1/auth/register', [
