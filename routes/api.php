@@ -43,6 +43,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/requests', [ServiceRequestController::class, 'index'])->name('requests.index');
         Route::post('/requests', [ServiceRequestController::class, 'store'])->name('requests.store');
         Route::post('/requests/{uuid}/survey', [ServiceRequestController::class, 'survey'])->name('requests.survey');
+        Route::post('/requests/{uuid}/cancel', [ServiceRequestController::class, 'cancel'])->name('requests.cancel');
         Route::delete('/requests/cleanup', [ServiceRequestController::class, 'cleanup'])->name('requests.cleanup');
 
         // Matching Engine
@@ -53,8 +54,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Works
         Route::post('/works/{id}/complete', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'complete'])->name('works.complete');
+        Route::post('/works/{id}/cancel', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'cancel'])->name('works.cancel');
+        Route::post('/works/{workId}/rate', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rate'])->name('works.rate');
 
-        // Provider Dashboard
+        // Provider Profile & Dashboard
+        Route::get('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'show'])->name('provider.profile.show');
+        Route::patch('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'update'])->name('provider.profile.update');
         Route::post('/provider/availability', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'availability'])->name('provider.availability');
         Route::get('/provider/work-requests', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'workRequests'])->name('provider.work-requests');
         Route::post('/provider/work-requests/{id}/confirm', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'confirmWorkRequest'])->name('provider.work-requests.confirm');

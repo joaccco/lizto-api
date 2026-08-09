@@ -81,6 +81,24 @@ class ServiceRequestController extends Controller
     public function store(CreateServiceRequestRequest $request): JsonResponse
     {
         $user = $request->user();
+        $prompt = $request->input('prompt');
+
+        $existing = ServiceRequestModel::where('client_id', $user->id)
+            ->where('raw_prompt', $prompt)
+            ->whereIn('status', ['pending_survey', 'pending_matching', 'matching_active'])
+            ->where('created_at', '>', now()->subMinutes(5))
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($existing) {
+            if ($existing->category_id) {
+                $existing->load('category.surveyQuestions');
+            }
+            return response()->json([
+                'data' => (new ServiceRequestResource($existing))->resolve(),
+                'message' => 'Solicitud recuperada.',
+            ], 200);
+        }
 
         $categoryId = $request->input('category_id');
         $categorySlug = $request->input('category_slug');
@@ -171,6 +189,28 @@ class ServiceRequestController extends Controller
             ],
             'message' => 'Encuesta completada.',
         ], 200);
+    }
+
+    public function cancel(string $uuid, Request $request): JsonResponse
+    {
+        $serviceRequest = ServiceRequestModel::where('uuid', $uuid)->first();
+        if (!$serviceRequest) {
+            $serviceRequest = ServiceRequestModel::where('id', $uuid)->first();
+        }
+
+        if ($serviceRequest) {
+            $serviceRequest->update([
+                'status' => 'cancelled',
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Solicitud cancelada correctamente.',
+            'data' => [
+                'id' => $uuid,
+                'status' => 'cancelled',
+            ],
+        ]);
     }
 
     public function cleanup(Request $request): JsonResponse
