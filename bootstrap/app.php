@@ -40,4 +40,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 409);
             }
         });
+        $exceptions->render(function (\App\Domain\Offers\Exceptions\ContactInfoDetectedException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+        });
+        $exceptions->render(function (\App\Domain\Offers\Exceptions\MaxCounterOfferRoundsExceededException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+        });
     })->create();

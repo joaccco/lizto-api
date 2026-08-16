@@ -74,6 +74,18 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/works/{id}/cancel', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'cancel'])->name('works.cancel');
         Route::post('/works/{workId}/rate', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rate'])->name('works.rate');
 
+        // Offers (Bloque A)
+        Route::post('/service-requests/{id}/offers', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'store'])->name('offers.store');
+        Route::post('/offers/{id}/counter', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'counter'])->name('offers.counter');
+        Route::post('/offers/{id}/accept', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'accept'])->name('offers.accept');
+        Route::post('/offers/{id}/reject', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'reject'])->name('offers.reject');
+        Route::post('/offers/{id}/questions', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'askQuestion'])->name('offers.questions.store');
+        Route::post('/offer-questions/{id}/answer', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'answerQuestion'])->name('offer-questions.answer');
+
+        // Conversations & Chat (Bloque A)
+        Route::get('/conversations/{id}/messages', [\App\Http\Controllers\Api\V1\Conversations\ConversationController::class, 'messages'])->name('conversations.messages.index');
+        Route::post('/conversations/{id}/messages', [\App\Http\Controllers\Api\V1\Conversations\ConversationController::class, 'sendMessage'])->name('conversations.messages.store');
+
         // Provider Profile & Dashboard
         Route::get('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'show'])->name('provider.profile.show');
         Route::patch('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'update'])->name('provider.profile.update');
