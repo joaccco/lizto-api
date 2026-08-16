@@ -51,7 +51,7 @@ class MatchSessionController extends Controller
             ]);
         }
 
-        $serviceRequest->update(['status' => 'matching_active']);
+        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::MatchingActive);
 
         $session->load(['cards' => function ($q) {
             $q->orderBy('rank_position')->with('provider.user');
@@ -85,9 +85,7 @@ class MatchSessionController extends Controller
 
         $session->increment('total_shown');
 
-        $serviceRequest->update([
-            'status' => RequestStatus::ProviderSelected->value,
-        ]);
+        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::ProviderSelected);
 
         return response()->json([
             'data' => [

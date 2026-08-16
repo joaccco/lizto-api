@@ -13,4 +13,22 @@ enum RequestStatus: string
     case Completed = 'completed';
     case Cancelled = 'cancelled';
     case Expired = 'expired';
+
+    public function allowedTransitions(): array
+    {
+        return match ($this) {
+            self::PendingSurvey => [self::PendingMatching, self::MatchingActive, self::Cancelled, self::Expired],
+            self::PendingMatching => [self::MatchingActive, self::Cancelled, self::Expired],
+            self::MatchingActive => [self::ProviderSelected, self::Cancelled, self::Expired],
+            self::ProviderSelected => [self::PendingProvider, self::MatchingActive, self::Cancelled, self::Expired],
+            self::PendingProvider => [self::Active, self::MatchingActive, self::Cancelled, self::Expired],
+            self::Active => [self::Completed, self::Cancelled],
+            self::Completed, self::Cancelled, self::Expired => [],
+        };
+    }
+
+    public function canTransitionTo(self $target): bool
+    {
+        return in_array($target, $this->allowedTransitions(), true);
+    }
 }

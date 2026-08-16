@@ -16,4 +16,21 @@ class WorkModel extends Model
     public function provider() { return $this->belongsTo(ProviderProfileModel::class, 'provider_id'); }
     public function events() { return $this->hasMany(WorkEventModel::class, 'work_id'); }
     public function ratings() { return $this->hasMany(RatingModel::class, 'work_id'); }
+
+    public function transitionTo(WorkStatus|string $targetStatus): void
+    {
+        $targetEnum = is_string($targetStatus) ? WorkStatus::from($targetStatus) : $targetStatus;
+        $currentEnum = $this->status instanceof WorkStatus ? $this->status : WorkStatus::from($this->status);
+
+        if (!$currentEnum->canTransitionTo($targetEnum)) {
+            throw new \App\Domain\Shared\Exceptions\InvalidStateTransitionException(
+                "No se puede cambiar el estado de {$currentEnum->value} a {$targetEnum->value}."
+            );
+        }
+
+        $this->update([
+            'status' => $targetEnum,
+            'completed_at' => $targetEnum === WorkStatus::Completed ? now() : $this->completed_at,
+        ]);
+    }
 }

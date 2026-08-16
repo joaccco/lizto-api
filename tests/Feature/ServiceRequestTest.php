@@ -128,4 +128,26 @@ class ServiceRequestTest extends TestCase
             'status' => 'pending_matching',
         ]);
     }
+
+    public function test_cancel_service_request_with_non_existent_uuid_returns_404(): void
+    {
+        $user = $this->createTestUser();
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/requests/00000000-0000-0000-0000-000000000000/cancel');
+
+        $response->assertStatus(404)
+            ->assertJson(['message' => 'Recurso no encontrado.']);
+    }
+
+    public function test_cancel_service_request_with_integer_id_returns_404(): void
+    {
+        $user = $this->createTestUser();
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/requests/1/cancel');
+
+        $response->assertStatus(404)
+            ->assertJson(['message' => 'Recurso no encontrado.']);
+    }
 }

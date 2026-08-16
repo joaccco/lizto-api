@@ -61,20 +61,40 @@ final class RunMatchingAction
                   ->where('is_active', true);
             })
             ->when(!$request->is_remote && $request->location_lat, function ($q) use ($request) {
-                $q->whereRaw("
-                    (6371 * acos(
-                        LEAST(1.0, GREATEST(-1.0,
-                            cos(radians(?)) * cos(radians(base_lat)) *
-                            cos(radians(base_lng) - radians(?)) +
-                            sin(radians(?)) * sin(radians(base_lat))
-                        ))
-                    )) <= ?
-                ", [
-                    $request->location_lat,
-                    $request->location_lng,
-                    $request->location_lat,
-                    self::MAX_DISTANCE,
-                ]);
+                $q->where(function ($query) use ($request) {
+                    $query->whereHas('serviceAreas', function ($sq) use ($request) {
+                        $sq->whereRaw("
+                            (6371 * acos(
+                                LEAST(1.0, GREATEST(-1.0,
+                                    cos(radians(?)) * cos(radians(center_lat)) *
+                                    cos(radians(center_lng) - radians(?)) +
+                                    sin(radians(?)) * sin(radians(center_lat))
+                                ))
+                            )) <= radius_km
+                        ", [
+                            $request->location_lat,
+                            $request->location_lng,
+                            $request->location_lat,
+                        ]);
+                    })
+                    ->orWhere(function ($sq) use ($request) {
+                        $sq->doesntHave('serviceAreas')
+                          ->whereRaw("
+                            (6371 * acos(
+                                LEAST(1.0, GREATEST(-1.0,
+                                    cos(radians(?)) * cos(radians(base_lat)) *
+                                    cos(radians(base_lng) - radians(?)) +
+                                    sin(radians(?)) * sin(radians(base_lat))
+                                ))
+                            )) <= ?
+                          ", [
+                              $request->location_lat,
+                              $request->location_lng,
+                              $request->location_lat,
+                              self::MAX_DISTANCE,
+                          ]);
+                    });
+                });
             })
             ->when($urgencyVal === 'immediate', function ($q) {
                 $q->where(function ($q) {
@@ -87,7 +107,7 @@ final class RunMatchingAction
             })
             ->with(['categories' => function ($q) use ($request) {
                 $q->where('category_id', $request->category_id);
-            }, 'user'])
+            }, 'user', 'serviceAreas'])
             ->get();
     }
 

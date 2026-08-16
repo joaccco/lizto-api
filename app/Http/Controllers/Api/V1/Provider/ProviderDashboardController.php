@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 
 class ProviderDashboardController extends Controller
 {
+    use \App\Traits\ResolvesByUuid;
+
     public function availability(Request $request): JsonResponse
     {
         $request->validate([
@@ -81,23 +83,31 @@ class ProviderDashboardController extends Controller
             'estimated_duration_min' => 'nullable|integer',
         ]);
 
-        $serviceRequest = ServiceRequestModel::where('uuid', $id)->first();
-        if ($serviceRequest) {
-            $serviceRequest->update(['status' => 'confirmed']);
+        $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $id);
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Recurso no encontrado.'], 404);
         }
+
+        \Illuminate\Support\Facades\Gate::authorize('respond', $serviceRequest);
+
+        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Active);
 
         return response()->json([
             'message' => 'Trabajo confirmado.',
-            'data' => ['id' => $id, 'status' => 'confirmed'],
+            'data' => ['id' => $id, 'status' => 'active'],
         ]);
     }
 
     public function declineWorkRequest(string $id): JsonResponse
     {
-        $serviceRequest = ServiceRequestModel::where('uuid', $id)->first();
-        if ($serviceRequest) {
-            $serviceRequest->update(['status' => 'cancelled']);
+        $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $id);
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Recurso no encontrado.'], 404);
         }
+
+        \Illuminate\Support\Facades\Gate::authorize('respond', $serviceRequest);
+
+        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
 
         return response()->json([
             'message' => 'Solicitud declinada.',

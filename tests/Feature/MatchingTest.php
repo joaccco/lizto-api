@@ -201,4 +201,74 @@ class MatchingTest extends TestCase
             ->assertJsonPath('data.card_status', 'recovered')
             ->assertJsonPath('message', 'Tarjeta recuperada.');
     }
+
+    public function test_can_request_match_with_survey(): void
+    {
+        $user = $this->createTestUser();
+        Sanctum::actingAs($user);
+
+        $createResponse = $this->postJson('/api/v1/requests', [
+            'prompt' => 'necesito un cerrajero urgente',
+            'urgency' => 'immediate',
+            'category_slug' => 'cerrajeria',
+            'location' => [
+                'lat' => -27.4692,
+                'lng' => -58.8306,
+                'address' => 'Corrientes, Argentina',
+            ],
+        ]);
+
+        $requestId = $createResponse->json('data.id');
+
+        $this->postJson("/api/v1/requests/{$requestId}/survey", [
+            'answers' => [
+                [
+                    'question_key' => 'service_type',
+                    'question_text' => '¿Qué necesitás?',
+                    'answer_value' => 'apertura',
+                ],
+            ],
+        ]);
+
+        $matchResponse = $this->postJson("/api/v1/requests/{$requestId}/match");
+
+        $matchResponse->assertStatus(201);
+        $this->assertDatabaseHas('service_requests', [
+            'uuid' => $requestId,
+            'status' => 'matching_active',
+        ]);
+    }
+
+    public function test_can_request_match_directly_without_survey(): void
+    {
+        $user = $this->createTestUser();
+        Sanctum::actingAs($user);
+
+        $createResponse = $this->postJson('/api/v1/requests', [
+            'prompt' => 'necesito un cerrajero urgente',
+            'urgency' => 'immediate',
+            'category_slug' => 'cerrajeria',
+            'location' => [
+                'lat' => -27.4692,
+                'lng' => -58.8306,
+                'address' => 'Corrientes, Argentina',
+            ],
+        ]);
+
+        $requestId = $createResponse->json('data.id');
+
+        $this->assertDatabaseHas('service_requests', [
+            'uuid' => $requestId,
+            'status' => 'pending_survey',
+        ]);
+
+        $matchResponse = $this->postJson("/api/v1/requests/{$requestId}/match");
+
+        $matchResponse->assertStatus(201);
+        $this->assertDatabaseHas('service_requests', [
+            'uuid' => $requestId,
+            'status' => 'matching_active',
+        ]);
+    }
 }
+

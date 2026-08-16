@@ -178,36 +178,37 @@ class ServiceRequestController extends Controller
 
         $serviceRequest->update([
             'structured_data' => $structuredData,
-            'status' => 'pending_matching',
         ]);
+        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::PendingMatching);
 
         return response()->json([
             'data' => [
                 'request_id' => $serviceRequest->uuid,
-                'status' => 'pending_matching',
+                'status' => $serviceRequest->status->value,
                 'structured_data' => $structuredData,
             ],
             'message' => 'Encuesta completada.',
         ], 200);
     }
 
+    use \App\Traits\ResolvesByUuid;
+
     public function cancel(string $uuid, Request $request): JsonResponse
     {
-        $serviceRequest = ServiceRequestModel::where('uuid', $uuid)->first();
+        $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $uuid);
+
         if (!$serviceRequest) {
-            $serviceRequest = ServiceRequestModel::where('id', $uuid)->first();
+            return response()->json(['message' => 'Recurso no encontrado.'], 404);
         }
 
-        if ($serviceRequest) {
-            $serviceRequest->update([
-                'status' => 'cancelled',
-            ]);
-        }
+        \Illuminate\Support\Facades\Gate::authorize('cancel', $serviceRequest);
+
+        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
 
         return response()->json([
             'message' => 'Solicitud cancelada correctamente.',
             'data' => [
-                'id' => $uuid,
+                'id' => $serviceRequest->uuid,
                 'status' => 'cancelled',
             ],
         ]);

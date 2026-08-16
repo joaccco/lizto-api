@@ -18,33 +18,50 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         ]);
     })->name('health');
 
-    // Auth — público
-    Route::prefix('auth')->name('auth.')->group(function () {
-        Route::post('/register', [AuthController::class, 'register'])->name('register');
-        Route::post('/login',    [AuthController::class, 'login'])->name('login');
+    $throttleLogin = 'throttle:' . env('RATE_LIMIT_LOGIN', '5,1');
+    $throttleCatalog = 'throttle:' . env('RATE_LIMIT_CATALOG', '60,1');
+    $throttleProtected = 'throttle:' . env('RATE_LIMIT_PROTECTED', '60,1');
 
-        Route::middleware('auth:sanctum')->group(function () {
+    // Auth — público
+    Route::prefix('auth')->name('auth.')->group(function () use ($throttleLogin, $throttleProtected) {
+        Route::post('/register', [AuthController::class, 'register'])->middleware($throttleLogin)->name('register');
+        Route::post('/login',    [AuthController::class, 'login'])->middleware($throttleLogin)->name('login');
+
+        Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
             Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
             Route::get('/me',      [ProfileController::class, 'me'])->name('me');
         });
     });
 
     // Catálogo — público
-    Route::get('/categories', [\App\Http\Controllers\Api\V1\Providers\CategoryController::class, 'index'])->name('categories.index');
-    Route::get('/providers', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'index'])->name('providers.index');
-    Route::get('/providers/{uuid}', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'show'])->name('providers.show');
+    Route::middleware($throttleCatalog)->group(function () {
+        Route::get('/categories', [\App\Http\Controllers\Api\V1\Providers\CategoryController::class, 'index'])->name('categories.index');
+        Route::get('/providers', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'index'])->name('providers.index');
+        Route::get('/providers/{uuid}', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'show'])->name('providers.show');
 
-    // Parser de solicitudes — público
-    Route::post('/requests/parse', [\App\Http\Controllers\Api\V1\ServiceRequests\ParseRequestController::class, 'parse'])->name('requests.parse');
+        // Parser de solicitudes — público
+        Route::post('/requests/parse', [\App\Http\Controllers\Api\V1\ServiceRequests\ParseRequestController::class, 'parse'])->name('requests.parse');
+    });
 
     // Rutas protegidas (auth:sanctum)
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
         // Service Requests
         Route::get('/requests', [ServiceRequestController::class, 'index'])->name('requests.index');
         Route::post('/requests', [ServiceRequestController::class, 'store'])->name('requests.store');
         Route::post('/requests/{uuid}/survey', [ServiceRequestController::class, 'survey'])->name('requests.survey');
         Route::post('/requests/{uuid}/cancel', [ServiceRequestController::class, 'cancel'])->name('requests.cancel');
         Route::delete('/requests/cleanup', [ServiceRequestController::class, 'cleanup'])->name('requests.cleanup');
+
+        // Clarification Engine (Bloque B)
+        Route::post('/clarification/service-requests', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'store'])->name('clarification.store');
+        Route::post('/clarification/service-requests/{id}/classify', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'classifyOverride'])->name('clarification.classify');
+        Route::get('/clarification/service-requests/{id}/next-question', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'getNextQuestion'])->name('clarification.next-question');
+        Route::post('/clarification/service-requests/{id}/answers', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'answerQuestion'])->name('clarification.answer');
+        Route::delete('/clarification/service-requests/{id}/answers/{questionId}', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'removeAnswer'])->name('clarification.remove-answer');
+        Route::post('/clarification/service-requests/{id}/attachments', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'storeAttachment'])->name('clarification.attachment');
+        Route::get('/clarification/service-requests/{id}/brief', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'getBrief'])->name('clarification.brief.get');
+        Route::post('/clarification/service-requests/{id}/brief/confirm', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'confirmBrief'])->name('clarification.brief.confirm');
+        Route::patch('/clarification/service-requests/{id}/brief', [\App\Http\Controllers\Api\V1\Clarification\ClarificationController::class, 'patchBrief'])->name('clarification.brief.patch');
 
         // Matching Engine
         Route::post('/requests/{uuid}/match', [MatchSessionController::class, 'createSession'])->name('requests.match');
