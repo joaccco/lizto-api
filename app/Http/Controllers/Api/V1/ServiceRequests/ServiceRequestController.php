@@ -23,36 +23,52 @@ class ServiceRequestController extends Controller
         $query = ServiceRequestModel::where('client_id', $user->id)
             ->with([
                 'category',
+                'works.provider.user',
+                'works.conversation',
                 'matchSession.cards' => function ($q) {
                     $q->where('card_status', 'accepted')->with('provider.user');
                 },
             ]);
 
         if ($request->query('status') === 'active') {
-            $query->whereIn('status', [
-                'provider_selected',
-                'pending_confirmation',
-                'confirmed',
-                'in_progress',
-                'pending_completion',
-            ]);
+            $query->where(function ($q) {
+                $q->whereIn('status', [
+                    'pending_survey',
+                    'pending_matching',
+                    'matching_active',
+                    'provider_selected',
+                    'pending_confirmation',
+                    'confirmed',
+                    'in_progress',
+                    'pending_completion',
+                    'active',
+                ])->orWhere(function ($q2) {
+                    $q2->where('status', 'cancelled')
+                       ->where('updated_at', '>=', now()->subHours(2));
+                });
+            });
         }
 
         $limit = (int) $request->query('limit', 10);
         $requests = $query->orderByDesc('created_at')->paginate($limit);
 
         $items = collect($requests->items())->map(function ($sr) {
+            $work = $sr->works->first();
             $acceptedCard = $sr->matchSession?->cards->first();
-            $provider = $acceptedCard?->provider;
+            $provider = $work?->provider ?? $acceptedCard?->provider;
             $providerUser = $provider?->user;
             $snapshot = $acceptedCard?->snapshot ?? [];
+            $statusVal = $work ? $work->status->value : ($sr->status instanceof \BackedEnum ? $sr->status->value : $sr->status);
 
             return [
                 'uuid' => $sr->uuid,
+                'work_id' => $work?->uuid,
+                'conversation_id' => $work?->conversation?->uuid,
                 'raw_prompt' => Str::limit($sr->raw_prompt, 60),
                 'full_prompt' => $sr->raw_prompt,
-                'status' => $sr->status instanceof \BackedEnum ? $sr->status->value : $sr->status,
+                'status' => $statusVal,
                 'urgency' => $sr->urgency instanceof \BackedEnum ? $sr->urgency->value : $sr->urgency,
+                'estimated_duration_min' => $work?->estimated_duration_min ?? 60,
                 'category' => $sr->category ? [
                     'name' => $sr->category->name,
                     'slug' => $sr->category->slug,
@@ -74,6 +90,77 @@ class ServiceRequestController extends Controller
                 'per_page' => $requests->perPage(),
                 'total' => $requests->total(),
                 'last_page' => $requests->lastPage(),
+            ],
+        ]);
+    }
+
+    public function show(string $uuid, Request $request): JsonResponse
+    {
+        $sr = ServiceRequestModel::where('uuid', $uuid)
+            ->with([
+                'category',
+                'works.provider.user',
+                'works.conversation',
+                'matchSession.cards' => function ($q) {
+                    $q->where('card_status', 'accepted')->with('provider.user');
+                },
+            ])
+            ->first();
+
+        if (!$sr) {
+            return response()->json(['message' => 'Solicitud no encontrada.'], 404);
+        }
+
+        $work = $sr->works->first();
+        $acceptedCard = $sr->matchSession?->cards->first();
+        $provider = $work?->provider ?? $acceptedCard?->provider;
+        $providerUser = $provider?->user;
+        $statusVal = $work ? $work->status->value : ($sr->status instanceof \BackedEnum ? $sr->status->value : $sr->status);
+
+        $conversationId = $work?->conversation?->uuid;
+        if (!$conversationId && $work) {
+            $conv = \App\Infrastructure\Persistence\Eloquent\ConversationModel::firstOrCreate(
+                ['work_id' => $work->id],
+                [
+                    'uuid' => (string) Str::uuid(),
+                    'service_request_id' => $sr->id,
+                    'client_id' => $sr->client_id,
+                    'provider_id' => $work->provider_id,
+                ]
+            );
+            $conversationId = $conv->uuid;
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $sr->uuid,
+                'uuid' => $sr->uuid,
+                'raw_prompt' => $sr->raw_prompt,
+                'status' => $statusVal,
+                'urgency' => $sr->urgency instanceof \BackedEnum ? $sr->urgency->value : $sr->urgency,
+                'address' => $sr->location_address ?? 'Centro',
+                'created_at' => $sr->created_at?->toISOString(),
+                'conversation_id' => $conversationId,
+                'category' => $sr->category ? [
+                    'name' => $sr->category->name,
+                    'slug' => $sr->category->slug,
+                ] : null,
+                'accepted_provider' => $provider ? [
+                    'id' => $provider->uuid,
+                    'uuid' => $provider->uuid,
+                    'name' => $providerUser?->name ?? 'Proveedor',
+                    'avatar_url' => $providerUser?->avatar_url,
+                    'bio' => $provider->bio ?? 'Profesional certificado con amplia experiencia.',
+                    'avg_rating' => (float) ($provider->avg_rating ?? 5.0),
+                    'total_reviews' => (int) ($provider->total_reviews ?? 0),
+                    'total_jobs_completed' => (int) ($provider->total_jobs_completed ?? 0),
+                    'years_experience' => (int) ($provider->years_experience ?? 5),
+                    'is_verified' => (bool) ($provider->is_verified ?? true),
+                    'specialties' => $provider->specialties ?? ['Servicios integrales'],
+                    'price_from' => $provider->price_from ?? 8000,
+                    'price_to' => $provider->price_to ?? 35000,
+                    'response_time' => $provider->avg_response_minutes ? "~{$provider->avg_response_minutes} min" : "~10 min",
+                ] : null,
             ],
         ]);
     }

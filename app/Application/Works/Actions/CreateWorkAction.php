@@ -9,20 +9,21 @@ use Illuminate\Support\Str;
 
 class CreateWorkAction
 {
-    public function execute(OfferModel $offer): WorkModel
+    public function execute(OfferModel $offer, ?int $matchCardId = null): WorkModel
     {
         $serviceRequest = $offer->serviceRequest;
 
         return WorkModel::create([
             'uuid' => (string) Str::uuid(),
             'service_request_id' => $serviceRequest->id,
+            'match_card_id' => $matchCardId,
             'client_id' => $serviceRequest->client_id,
             'provider_id' => $offer->provider_id,
             'status' => WorkStatus::Confirmed,
-            'agreed_price' => $offer->proposed_price,
-            'currency' => $offer->currency_code,
+            'agreed_price' => $offer->proposed_price ?? 0.00,
+            'currency' => $offer->currency_code ?? 'ARS',
             'scheduled_at' => $offer->proposed_start_at ?? now(),
-            'estimated_duration_min' => $offer->estimated_duration_min,
+            'estimated_duration_min' => $offer->estimated_duration_min ?? 60,
             'work_lat' => $serviceRequest->location_lat,
             'work_lng' => $serviceRequest->location_lng,
             'work_address' => $serviceRequest->location_address,

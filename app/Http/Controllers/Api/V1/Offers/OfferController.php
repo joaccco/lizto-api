@@ -30,29 +30,47 @@ class OfferController extends Controller
 {
     public function __construct(
         protected ContactInfoGuard $contactGuard,
-        protected CreateWorkAction $createWorkAction
+        protected CreateWorkAction $createWorkAction,
+        protected \App\Application\Offers\Actions\AcceptOfferAction $acceptOfferAction
     ) {}
 
     public function store(Request $request, string $serviceRequestId): JsonResponse
     {
-        $serviceRequest = ServiceRequestModel::where('uuid', $serviceRequestId)->firstOrFail();
+        $serviceRequest = ServiceRequestModel::where('uuid', $serviceRequestId)
+            ->with(['serviceType', 'category'])
+            ->firstOrFail();
+
         $user = $request->user();
 
         $provider = ProviderProfileModel::where('user_id', $user->id)->first()
             ?? ProviderProfileModel::first();
 
+        // Determine default pricing_mode from ServiceType
+        $defaultPricingMode = 'quoted';
+        if ($serviceRequest->serviceType && $serviceRequest->serviceType->requires_onsite_diagnosis) {
+            $defaultPricingMode = 'requires_visit';
+        }
+
         $validated = $request->validate([
+            'pricing_mode' => 'nullable|in:quoted,requires_visit',
             'proposed_price' => 'nullable|numeric|min:0',
             'currency_code' => 'nullable|string|size:3',
             'proposed_start_at' => 'nullable|date',
             'estimated_duration_min' => 'nullable|integer|min:1',
         ]);
 
+        $pricingMode = $validated['pricing_mode'] ?? $defaultPricingMode;
+
+        if ($pricingMode === 'quoted' && (!isset($validated['proposed_price']) || $validated['proposed_price'] === null)) {
+            return response()->json(['message' => 'El precio propuesto es obligatorio para ofertas cotizadas a distancia.'], 422);
+        }
+
         $offer = OfferModel::create([
             'uuid' => (string) Str::uuid(),
             'service_request_id' => $serviceRequest->id,
             'provider_id' => $provider->id,
             'status' => OfferStatus::Pending,
+            'pricing_mode' => $pricingMode,
             'proposed_price' => $validated['proposed_price'] ?? null,
             'currency_code' => $validated['currency_code'] ?? 'ARS',
             'proposed_start_at' => $validated['proposed_start_at'] ?? null,
@@ -66,6 +84,7 @@ class OfferController extends Controller
             'data' => [
                 'id' => $offer->uuid,
                 'status' => $offer->status->value,
+                'pricing_mode' => $offer->pricing_mode,
                 'proposed_price' => $offer->proposed_price,
                 'currency_code' => $offer->currency_code,
                 'round_number' => $offer->round_number,
@@ -112,48 +131,22 @@ class OfferController extends Controller
 
     public function accept(string $id): JsonResponse
     {
-        return DB::transaction(function () use ($id) {
-            $offer = OfferModel::where('uuid', $id)->firstOrFail();
-            $serviceRequest = ServiceRequestModel::where('id', $offer->service_request_id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        $offer = OfferModel::where('uuid', $id)->firstOrFail();
 
-            // Guard against multiple active accepted offers
-            $existingAccepted = OfferModel::where('service_request_id', $serviceRequest->id)
-                ->where('status', OfferStatus::Accepted->value)
-                ->exists();
-
-            if ($existingAccepted) {
-                return response()->json(['message' => 'Esta solicitud ya tiene una oferta aceptada activa.'], 409);
-            }
-
-            $offer->update(['status' => OfferStatus::Accepted]);
-
-            // Create Work via Action
-            $work = $this->createWorkAction->execute($offer);
-
-            // Create Conversation automatically
-            $conversation = ConversationModel::create([
-                'uuid' => (string) Str::uuid(),
-                'work_id' => $work->id,
-                'service_request_id' => $serviceRequest->id,
-                'client_id' => $serviceRequest->client_id,
-                'provider_id' => $offer->provider_id,
-                'offer_id' => $offer->id,
-            ]);
-
-            event(new OfferAccepted($offer));
-
+        try {
+            $result = $this->acceptOfferAction->execute($offer);
             return response()->json([
                 'data' => [
-                    'offer_id' => $offer->uuid,
-                    'status' => $offer->status->value,
-                    'work_id' => $work->uuid,
-                    'conversation_id' => $conversation->uuid,
+                    'offer_id' => $result['offer']->uuid,
+                    'status' => $result['offer']->status->value,
+                    'work_id' => $result['work']->uuid,
+                    'conversation_id' => $result['conversation']->uuid,
                 ],
                 'message' => 'Oferta aceptada. Trabajo y conversación creados exitosamente.',
             ]);
-        });
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->getCode() ?: 422);
+        }
     }
 
     public function reject(Request $request, string $id): JsonResponse
@@ -217,7 +210,11 @@ class OfferController extends Controller
         $answerText = $validated['answer'];
 
         // PRE-AGREEMENT ANTI-CONTACT GUARD
-        $this->contactGuard->guardPreAgreement($answerText);
+        try {
+            $this->contactGuard->guardPreAgreement($answerText);
+        } catch (\App\Domain\Offers\Exceptions\ContactInfoDetectedException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         $offerQuestion->update([
             'answer' => $answerText,

@@ -26,6 +26,10 @@ class ServiceRequestModel extends Model
         $targetEnum = is_string($targetStatus) ? RequestStatus::from($targetStatus) : $targetStatus;
         $currentEnum = $this->status instanceof RequestStatus ? $this->status : RequestStatus::from($this->status);
 
+        if ($currentEnum === $targetEnum) {
+            return;
+        }
+
         if (!$currentEnum->canTransitionTo($targetEnum)) {
             throw new \App\Domain\Shared\Exceptions\InvalidStateTransitionException(
                 "No se puede cambiar el estado de {$currentEnum->value} a {$targetEnum->value}."

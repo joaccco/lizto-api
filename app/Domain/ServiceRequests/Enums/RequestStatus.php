@@ -17,11 +17,11 @@ enum RequestStatus: string
     public function allowedTransitions(): array
     {
         return match ($this) {
-            self::PendingSurvey => [self::PendingMatching, self::MatchingActive, self::Cancelled, self::Expired],
-            self::PendingMatching => [self::MatchingActive, self::Cancelled, self::Expired],
-            self::MatchingActive => [self::ProviderSelected, self::Cancelled, self::Expired],
-            self::ProviderSelected => [self::PendingProvider, self::MatchingActive, self::Cancelled, self::Expired],
-            self::PendingProvider => [self::Active, self::MatchingActive, self::Cancelled, self::Expired],
+            self::PendingSurvey => [self::PendingMatching, self::MatchingActive, self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
+            self::PendingMatching => [self::MatchingActive, self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
+            self::MatchingActive => [self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
+            self::ProviderSelected => [self::PendingProvider, self::MatchingActive, self::Active, self::Completed, self::Cancelled, self::Expired],
+            self::PendingProvider => [self::Active, self::Completed, self::MatchingActive, self::Cancelled, self::Expired],
             self::Active => [self::Completed, self::Cancelled],
             self::Completed, self::Cancelled, self::Expired => [],
         };

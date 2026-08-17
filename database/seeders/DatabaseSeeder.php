@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             SurveyQuestionSeeder::class,
             ClientUserSeeder::class,
             ProviderSeeder::class,
+            AgendaSeeder::class,
         ]);
     }
 }

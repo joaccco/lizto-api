@@ -47,6 +47,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
         // Service Requests
         Route::get('/requests', [ServiceRequestController::class, 'index'])->name('requests.index');
+        Route::get('/requests/{uuid}', [ServiceRequestController::class, 'show'])->name('requests.show');
         Route::post('/requests', [ServiceRequestController::class, 'store'])->name('requests.store');
         Route::post('/requests/{uuid}/survey', [ServiceRequestController::class, 'survey'])->name('requests.survey');
         Route::post('/requests/{uuid}/cancel', [ServiceRequestController::class, 'cancel'])->name('requests.cancel');
@@ -73,6 +74,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/works/{id}/complete', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'complete'])->name('works.complete');
         Route::post('/works/{id}/cancel', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'cancel'])->name('works.cancel');
         Route::post('/works/{workId}/rate', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rate'])->name('works.rate');
+        Route::post('/works/{id}/final-quote', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'submitFinalQuote'])->name('works.final-quote.submit');
+        Route::post('/works/{id}/final-quote/confirm', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'confirmFinalQuote'])->name('works.final-quote.confirm');
+        Route::post('/works/{id}/final-quote/reject', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rejectFinalQuote'])->name('works.final-quote.reject');
+        Route::get('/works/{id}/progress', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'progress'])->name('works.progress');
 
         // Offers (Bloque A)
         Route::post('/service-requests/{id}/offers', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'store'])->name('offers.store');
@@ -91,6 +96,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::patch('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'update'])->name('provider.profile.update');
         Route::post('/provider/availability', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'availability'])->name('provider.availability');
         Route::get('/provider/work-requests', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'workRequests'])->name('provider.work-requests');
+        Route::get('/provider/agenda', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'agenda'])->name('provider.agenda');
         Route::post('/provider/work-requests/{id}/confirm', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'confirmWorkRequest'])->name('provider.work-requests.confirm');
         Route::post('/provider/work-requests/{id}/decline', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'declineWorkRequest'])->name('provider.work-requests.decline');
     });

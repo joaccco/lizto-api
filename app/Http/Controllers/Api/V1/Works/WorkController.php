@@ -17,41 +17,38 @@ class WorkController extends Controller
     public function complete(string $id, Request $request): JsonResponse
     {
         $work = $this->findByUuid(WorkModel::class, $id);
-        $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $id);
 
-        if (!$work && !$serviceRequest) {
-            return response()->json(['message' => 'Recurso no encontrado.'], 404);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
-        if ($work) {
-            \Illuminate\Support\Facades\Gate::authorize('complete', $work);
-        } elseif ($serviceRequest) {
-            \Illuminate\Support\Facades\Gate::authorize('view', $serviceRequest);
+        \Illuminate\Support\Facades\Gate::authorize('complete', $work);
+
+        $workStatus = $work->status instanceof \BackedEnum ? $work->status->value : $work->status;
+        if ($workStatus === 'completed') {
+            return response()->json([
+                'message' => 'El trabajo fue marcado como completado.',
+                'data' => [
+                    'id' => $work->uuid,
+                    'status' => 'completed',
+                ],
+            ]);
         }
 
-        if ($serviceRequest) {
-            $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Completed);
+        $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Completed);
+
+        if ($work->serviceRequest && $work->serviceRequest->status !== \App\Domain\ServiceRequests\Enums\RequestStatus::Completed) {
+            $work->serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Completed);
         }
 
-        if ($work) {
-            $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Completed);
-
-            if ($work->provider) {
-                $work->provider->update(['availability_status' => 'available']);
-            }
-        } else {
-            // Also update provider profile if user is provider
-            $user = $request->user();
-            $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
-            if ($providerProfile) {
-                $providerProfile->update(['availability_status' => 'available']);
-            }
+        if ($work->provider) {
+            $work->provider->update(['availability_status' => 'available']);
         }
 
         return response()->json([
             'message' => 'El trabajo fue marcado como completado.',
             'data' => [
-                'id' => $id,
+                'id' => $work->uuid,
                 'status' => 'completed',
             ],
         ]);
@@ -62,42 +59,25 @@ class WorkController extends Controller
         $reason = $request->input('reason', 'No especificado');
 
         $work = $this->findByUuid(WorkModel::class, $id);
-        $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $id);
 
-        if (!$work && !$serviceRequest) {
-            return response()->json(['message' => 'Recurso no encontrado.'], 404);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
-        if ($work) {
-            \Illuminate\Support\Facades\Gate::authorize('cancel', $work);
-        } elseif ($serviceRequest) {
-            \Illuminate\Support\Facades\Gate::authorize('cancel', $serviceRequest);
-        }
+        \Illuminate\Support\Facades\Gate::authorize('cancel', $work);
 
-        if ($serviceRequest) {
-            $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
+        $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Cancelled);
+        if ($work->serviceRequest && $work->serviceRequest->status !== \App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled) {
+            $work->serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
         }
-
-        if ($work) {
-            $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Cancelled);
-            if ($work->serviceRequest && $work->serviceRequest->status !== \App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled) {
-                $work->serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
-            }
-            if ($work->provider) {
-                $work->provider->update(['availability_status' => 'available']);
-            }
-        }
-
-        $user = $request->user();
-        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
-        if ($providerProfile) {
-            $providerProfile->update(['availability_status' => 'available']);
+        if ($work->provider) {
+            $work->provider->update(['availability_status' => 'available']);
         }
 
         return response()->json([
             'message' => 'Trabajo cancelado.',
             'data' => [
-                'id' => $id,
+                'id' => $work->uuid,
                 'status' => 'cancelled',
                 'reason' => $reason,
             ],
@@ -114,38 +94,27 @@ class WorkController extends Controller
         $user = $request->user();
 
         $work = $this->findByUuid(WorkModel::class, $workId);
-        $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $workId);
 
-        if (!$work && !$serviceRequest) {
-            return response()->json(['message' => 'Recurso no encontrado.'], 404);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
-        if ($work) {
-            \Illuminate\Support\Facades\Gate::authorize('rate', $work);
-        } elseif ($serviceRequest) {
-            \Illuminate\Support\Facades\Gate::authorize('cancel', $serviceRequest);
-        }
+        \Illuminate\Support\Facades\Gate::authorize('rate', $work);
 
-        $workStatus = $work ? ($work->status instanceof \BackedEnum ? $work->status->value : $work->status)
-            : ($serviceRequest ? ($serviceRequest->status instanceof \BackedEnum ? $serviceRequest->status->value : $serviceRequest->status) : null);
+        $workStatus = $work->status instanceof \BackedEnum ? $work->status->value : $work->status;
 
         if ($workStatus !== 'completed') {
             return response()->json(['message' => 'Solo se pueden calificar trabajos completados.'], 422);
         }
 
-        $providerId = null;
-        $providerProfile = null;
-
-        if ($work && $work->provider) {
-            $providerProfile = $work->provider;
-            $providerId = $work->provider->user_id;
-        }
+        $providerProfile = $work->provider;
+        $providerId = $providerProfile?->user_id;
 
         if (!$providerId) {
             return response()->json(['message' => 'No se pudo identificar el profesional a calificar.'], 422);
         }
 
-        $existingRating = RatingModel::where('work_id', $work ? $work->id : null)
+        $existingRating = RatingModel::where('work_id', $work->id)
             ->where('reviewer_id', $user->id)
             ->where('direction', 'client_to_provider')
             ->first();
@@ -155,7 +124,7 @@ class WorkController extends Controller
         }
 
         $rating = RatingModel::create([
-            'work_id' => $work ? $work->id : null,
+            'work_id' => $work->id,
             'reviewer_id' => $user->id,
             'reviewed_id' => $providerId,
             'direction' => 'client_to_provider',
@@ -177,6 +146,123 @@ class WorkController extends Controller
         return response()->json([
             'message' => 'Calificación enviada con éxito.',
             'data' => $rating,
+        ]);
+    }
+
+    public function submitFinalQuote(string $id, Request $request): JsonResponse
+    {
+        $work = $this->findByUuid(WorkModel::class, $id);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+        }
+
+        $validated = $request->validate([
+            'final_price' => 'required|numeric|min:0',
+        ]);
+
+        $work->update([
+            'final_price' => $validated['final_price'],
+        ]);
+
+        event(new \App\Domain\Works\Events\FinalQuoteSubmitted($work));
+
+        return response()->json([
+            'message' => 'Presupuesto final enviado.',
+            'data' => [
+                'id' => $work->uuid,
+                'status' => $work->status->value,
+                'final_price' => $work->final_price,
+            ],
+        ]);
+    }
+
+    public function confirmFinalQuote(string $id, Request $request): JsonResponse
+    {
+        $work = $this->findByUuid(WorkModel::class, $id);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+        }
+
+        if (empty($work->final_price) || $work->final_price <= 0) {
+            return response()->json(['message' => 'No hay un presupuesto final cargado para confirmar.'], 422);
+        }
+
+        $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Confirmed);
+        $work->update([
+            'agreed_price' => $work->final_price,
+        ]);
+
+        event(new \App\Domain\Works\Events\FinalQuoteConfirmed($work));
+
+        return response()->json([
+            'message' => 'Presupuesto final confirmado.',
+            'data' => [
+                'id' => $work->uuid,
+                'status' => $work->status->value,
+                'agreed_price' => $work->agreed_price,
+            ],
+        ]);
+    }
+
+    public function rejectFinalQuote(string $id, Request $request): JsonResponse
+    {
+        $work = $this->findByUuid(WorkModel::class, $id);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+        }
+
+        $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Cancelled);
+
+        event(new \App\Domain\Works\Events\FinalQuoteRejected($work));
+
+        return response()->json([
+            'message' => 'Presupuesto final rechazado. El trabajo ha sido cancelado.',
+            'data' => [
+                'id' => $work->uuid,
+                'status' => $work->status->value,
+            ],
+        ]);
+    }
+
+    public function progress(string $id, Request $request): JsonResponse
+    {
+        $work = $this->findByUuid(WorkModel::class, $id);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+        }
+
+        $work->load(['provider.user', 'conversation']);
+        $provider = $work->provider;
+        $providerUser = $provider?->user;
+        $statusVal = $work->status instanceof \BackedEnum ? $work->status->value : $work->status;
+
+        $providerName = $providerUser?->name ?? 'El profesional';
+        $nextStepDescription = match ($statusVal) {
+            'pending_diagnosis_quote' => $work->final_price
+                ? "Esperando que confirmes el precio final cotizado por {$providerName}."
+                : "{$providerName} está evaluando el trabajo presencialmente.",
+            'confirmed', 'scheduled' => "Trabajo agendado y confirmado.",
+            'in_progress' => "Trabajo en curso.",
+            'completed' => "Trabajo completado.",
+            'cancelled' => "Trabajo cancelado.",
+            default => "En proceso.",
+        };
+
+        return response()->json([
+            'data' => [
+                'work_id' => $work->uuid,
+                'status' => $statusVal,
+                'agreed_price' => (float) $work->agreed_price,
+                'final_price' => $work->final_price ? (float) $work->final_price : null,
+                'currency' => $work->currency ?? 'ARS',
+                'provider' => [
+                    'name' => $providerUser?->name ?? 'Proveedor',
+                    'avatar_url' => $providerUser?->avatar_url,
+                    'avg_rating' => (float) ($provider?->avg_rating ?? 5.0),
+                ],
+                'conversation_id' => $work->conversation?->uuid,
+                'next_step_description' => $nextStepDescription,
+            ],
         ]);
     }
 }

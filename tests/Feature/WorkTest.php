@@ -108,6 +108,6 @@ class WorkTest extends TestCase
         ]);
 
         $response->assertStatus(404)
-            ->assertJson(['message' => 'Recurso no encontrado.']);
+            ->assertJson(['message' => 'Trabajo no encontrado.']);
     }
 }

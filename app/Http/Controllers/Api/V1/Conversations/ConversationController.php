@@ -16,20 +16,43 @@ class ConversationController extends Controller
 {
     public function __construct(protected ContactInfoGuard $contactGuard) {}
 
-    public function messages(string $id): JsonResponse
+    public function messages(string $id, Request $request): JsonResponse
     {
-        $conversation = ConversationModel::where('uuid', $id)->firstOrFail();
+        $conversation = ConversationModel::where('uuid', $id)
+            ->with(['client', 'provider.user', 'serviceRequest.category', 'work'])
+            ->first();
+
+        if (!$conversation) {
+            return response()->json(['message' => 'Conversación no encontrada.'], 404);
+        }
+
+        $user = $request->user();
         $messages = $conversation->messages()->with('sender')->get();
+
+        $providerUser = $conversation->provider?->user;
+        $providerProfile = $conversation->provider;
 
         return response()->json([
             'data' => [
                 'conversation_id' => $conversation->uuid,
+                'work_id' => $conversation->work?->uuid,
+                'client_id' => $conversation->client_id,
+                'client_name' => $conversation->client?->name ?? 'Cliente',
+                'provider_id' => $conversation->provider_id,
+                'provider_name' => $providerUser?->name ?? 'Profesional',
+                'provider_avatar' => $providerUser?->avatar_url,
+                'provider_rating' => (float) ($providerProfile?->avg_rating ?? 5.0),
+                'provider_reviews' => (int) ($providerProfile?->total_reviews ?? 0),
+                'category_name' => $conversation->serviceRequest?->category?->name ?? 'Servicio general',
+                'raw_prompt' => $conversation->serviceRequest?->raw_prompt ?? '',
+                'work_status' => $conversation->work?->status?->value ?? 'confirmed',
                 'messages' => $messages->map(fn($m) => [
                     'id' => $m->uuid,
                     'sender_id' => $m->sender_id,
                     'sender_name' => $m->sender?->name ?? 'Usuario',
                     'content' => $m->content,
                     'created_at' => $m->created_at?->toISOString(),
+                    'is_me' => $user ? ($m->sender_id === $user->id) : false,
                 ]),
             ],
         ]);
@@ -37,7 +60,11 @@ class ConversationController extends Controller
 
     public function sendMessage(Request $request, string $id): JsonResponse
     {
-        $conversation = ConversationModel::where('uuid', $id)->firstOrFail();
+        $conversation = ConversationModel::where('uuid', $id)->first();
+        if (!$conversation) {
+            return response()->json(['message' => 'Conversación no encontrada.'], 404);
+        }
+
         $user = $request->user();
 
         $validated = $request->validate([
@@ -75,6 +102,7 @@ class ConversationController extends Controller
                 'sender_id' => $message->sender_id,
                 'content' => $message->content,
                 'created_at' => $message->created_at?->toISOString(),
+                'is_me' => true,
             ],
             'message' => 'Mensaje enviado.',
         ], 201);

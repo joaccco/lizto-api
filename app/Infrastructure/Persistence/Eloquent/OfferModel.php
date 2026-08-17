@@ -15,6 +15,7 @@ class OfferModel extends Model
         'provider_id',
         'status',
         'rejection_reason',
+        'pricing_mode',
         'proposed_price',
         'currency_code',
         'proposed_start_at',

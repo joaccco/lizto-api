@@ -10,4 +10,11 @@ class ContactInfoDetectedException extends Exception
     {
         parent::__construct($message, 422);
     }
+
+    public function render($request)
+    {
+        return response()->json([
+            'message' => $this->getMessage(),
+        ], 422);
+    }
 }
