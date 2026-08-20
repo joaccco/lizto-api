@@ -263,8 +263,16 @@ class ServiceRequestController extends Controller
             $structuredData[$answer['question_key']] = $answer['answer_value'];
         }
 
+        $location = $request->input('location', []);
+        $lat = $location['lat'] ?? $request->input('location_lat') ?? $serviceRequest->location_lat;
+        $lng = $location['lng'] ?? $request->input('location_lng') ?? $serviceRequest->location_lng;
+        $address = $location['address'] ?? $request->input('location_address') ?? $serviceRequest->location_address;
+
         $serviceRequest->update([
-            'structured_data' => $structuredData,
+            'structured_data'  => $structuredData,
+            'location_lat'     => $lat,
+            'location_lng'     => $lng,
+            'location_address' => $address,
         ]);
         $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::PendingMatching);
 

@@ -32,6 +32,9 @@ class ConversationController extends Controller
         $providerUser = $conversation->provider?->user;
         $providerProfile = $conversation->provider;
 
+        $workStatus = $conversation->work?->status?->value ?? $conversation->serviceRequest?->status?->value ?? 'confirmed';
+        $isClosed = in_array($workStatus, ['completed', 'cancelled'], true);
+
         return response()->json([
             'data' => [
                 'conversation_id' => $conversation->uuid,
@@ -45,7 +48,8 @@ class ConversationController extends Controller
                 'provider_reviews' => (int) ($providerProfile?->total_reviews ?? 0),
                 'category_name' => $conversation->serviceRequest?->category?->name ?? 'Servicio general',
                 'raw_prompt' => $conversation->serviceRequest?->raw_prompt ?? '',
-                'work_status' => $conversation->work?->status?->value ?? 'confirmed',
+                'work_status' => $workStatus,
+                'is_closed' => $isClosed,
                 'messages' => $messages->map(fn($m) => [
                     'id' => $m->uuid,
                     'sender_id' => $m->sender_id,
@@ -60,9 +64,19 @@ class ConversationController extends Controller
 
     public function sendMessage(Request $request, string $id): JsonResponse
     {
-        $conversation = ConversationModel::where('uuid', $id)->first();
+        $conversation = ConversationModel::where('uuid', $id)
+            ->with(['work', 'serviceRequest'])
+            ->first();
+
         if (!$conversation) {
             return response()->json(['message' => 'Conversación no encontrada.'], 404);
+        }
+
+        $workStatus = $conversation->work?->status?->value ?? $conversation->serviceRequest?->status?->value ?? 'confirmed';
+        if (in_array($workStatus, ['completed', 'cancelled'], true)) {
+            return response()->json([
+                'message' => 'El chat ha sido cerrado porque el trabajo fue completado o cancelado.',
+            ], 409);
         }
 
         $user = $request->user();

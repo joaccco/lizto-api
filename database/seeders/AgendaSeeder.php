@@ -152,7 +152,7 @@ class AgendaSeeder extends Seeder
                 ]);
 
                 // Create Work
-                WorkModel::create([
+                $work = WorkModel::create([
                     'uuid' => (string) Str::uuid(),
                     'service_request_id' => $sr->id,
                     'match_card_id' => $card->id,
@@ -164,6 +164,51 @@ class AgendaSeeder extends Seeder
                     'work_address' => $app['address'],
                     'agreed_price' => $app['price'],
                     'currency' => 'ARS',
+                ]);
+            }
+
+            // Create a real completed work with rating for the provider
+            $completedSr = ServiceRequestModel::create([
+                'uuid' => (string) Str::uuid(),
+                'client_id' => $clients[1]->id ?? $clients[0]->id,
+                'category_id' => $categoryId,
+                'raw_prompt' => 'Apertura urgente de puerta blindada y cambio de cerradura.',
+                'location_address' => 'Thames 1842, Palermo',
+                'urgency' => 'immediate',
+                'status' => 'completed',
+            ]);
+
+            $completedWork = WorkModel::create([
+                'uuid' => (string) Str::uuid(),
+                'service_request_id' => $completedSr->id,
+                'match_card_id' => MatchCardModel::first()?->id ?? 1,
+                'client_id' => $clients[1]->id ?? $clients[0]->id,
+                'provider_id' => $provider->id,
+                'status' => WorkStatus::Completed,
+                'scheduled_at' => $now->copy()->subDays(5),
+                'completed_at' => $now->copy()->subDays(5)->addHour(),
+                'estimated_duration_min' => 60,
+                'work_address' => 'Thames 1842, Palermo',
+                'agreed_price' => 28000,
+                'currency' => 'ARS',
+            ]);
+
+            \App\Infrastructure\Persistence\Eloquent\RatingModel::firstOrCreate([
+                'work_id' => $completedWork->id,
+                'reviewer_id' => $clients[1]->id ?? $clients[0]->id,
+            ], [
+                'reviewed_id' => $provider->user_id,
+                'direction' => 'client_to_provider',
+                'score' => 5,
+                'comment' => 'Excelente trabajo, solucionó el problema muy rápido y sin romper la puerta.',
+                'created_at' => $now->copy()->subDays(4),
+            ]);
+
+            $allRatings = \App\Infrastructure\Persistence\Eloquent\RatingModel::where('reviewed_id', $provider->user_id)->get();
+            if ($allRatings->count() > 0) {
+                $provider->update([
+                    'avg_rating' => round($allRatings->avg('score'), 2),
+                    'total_reviews' => $allRatings->count(),
                 ]);
             }
         }

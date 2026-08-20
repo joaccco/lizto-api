@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Api\V1\Works;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
 use App\Infrastructure\Persistence\Eloquent\RatingModel;
-use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
 use App\Infrastructure\Persistence\Eloquent\WorkModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WorkController extends Controller
 {
@@ -24,25 +24,13 @@ class WorkController extends Controller
 
         \Illuminate\Support\Facades\Gate::authorize('complete', $work);
 
-        $workStatus = $work->status instanceof \BackedEnum ? $work->status->value : $work->status;
-        if ($workStatus === 'completed') {
-            return response()->json([
-                'message' => 'El trabajo fue marcado como completado.',
-                'data' => [
-                    'id' => $work->uuid,
-                    'status' => 'completed',
-                ],
-            ]);
-        }
-
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Completed);
-
-        if ($work->serviceRequest && $work->serviceRequest->status !== \App\Domain\ServiceRequests\Enums\RequestStatus::Completed) {
-            $work->serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Completed);
-        }
+        $work->update([
+            'completed_at' => now(),
+        ]);
 
         if ($work->provider) {
-            $work->provider->update(['availability_status' => 'available']);
+            $work->provider->increment('total_jobs_completed');
         }
 
         return response()->json([
@@ -56,8 +44,6 @@ class WorkController extends Controller
 
     public function cancel(string $id, Request $request): JsonResponse
     {
-        $reason = $request->input('reason', 'No especificado');
-
         $work = $this->findByUuid(WorkModel::class, $id);
 
         if (!$work) {
@@ -66,16 +52,19 @@ class WorkController extends Controller
 
         \Illuminate\Support\Facades\Gate::authorize('cancel', $work);
 
+        $reason = $request->input('reason', 'Cancelado por el usuario');
+
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Cancelled);
-        if ($work->serviceRequest && $work->serviceRequest->status !== \App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled) {
-            $work->serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
-        }
+        $work->update([
+            'cancellation_reason' => $reason,
+        ]);
+
         if ($work->provider) {
-            $work->provider->update(['availability_status' => 'available']);
+            $work->provider->increment('cancellation_count');
         }
 
         return response()->json([
-            'message' => 'Trabajo cancelado.',
+            'message' => 'Trabajo cancelado correctamente.',
             'data' => [
                 'id' => $work->uuid,
                 'status' => 'cancelled',
@@ -84,69 +73,76 @@ class WorkController extends Controller
         ]);
     }
 
-    public function rate(string $workId, Request $request): JsonResponse
+    public function rate(string $id, Request $request): JsonResponse
     {
-        $request->validate([
-            'score' => 'required|integer|min:1|max:5',
-            'comment' => 'nullable|string|max:1000',
-        ]);
-
-        $user = $request->user();
-
-        $work = $this->findByUuid(WorkModel::class, $workId);
-
+        $work = $this->findByUuid(WorkModel::class, $id);
         if (!$work) {
             return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
+        $user = $request->user();
+
         \Illuminate\Support\Facades\Gate::authorize('rate', $work);
 
-        $workStatus = $work->status instanceof \BackedEnum ? $work->status->value : $work->status;
+        if ($work->client_id !== $user->id) {
+            return response()->json(['message' => 'Solo el cliente contratante puede calificar este trabajo.'], 403);
+        }
 
-        if ($workStatus !== 'completed') {
+        $statusVal = $work->status instanceof \BackedEnum ? $work->status->value : $work->status;
+        if ($statusVal !== 'completed') {
             return response()->json(['message' => 'Solo se pueden calificar trabajos completados.'], 422);
         }
 
-        $providerProfile = $work->provider;
-        $providerId = $providerProfile?->user_id;
-
-        if (!$providerId) {
-            return response()->json(['message' => 'No se pudo identificar el profesional a calificar.'], 422);
-        }
-
-        $existingRating = RatingModel::where('work_id', $work->id)
+        $existing = RatingModel::where('work_id', $work->id)
             ->where('reviewer_id', $user->id)
-            ->where('direction', 'client_to_provider')
             ->first();
 
-        if ($existingRating) {
+        if ($existing) {
             return response()->json(['message' => 'Ya calificaste este trabajo.'], 422);
         }
 
-        $rating = RatingModel::create([
-            'work_id' => $work->id,
-            'reviewer_id' => $user->id,
-            'reviewed_id' => $providerId,
-            'direction' => 'client_to_provider',
-            'score' => $request->input('score'),
-            'comment' => $request->input('comment'),
-            'created_at' => now(),
+        $validated = $request->validate([
+            'score' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
         ]);
 
-        if ($providerProfile) {
-            $avg = RatingModel::where('reviewed_id', $providerProfile->user_id)->avg('score') ?: $request->input('score');
-            $count = RatingModel::where('reviewed_id', $providerProfile->user_id)->count();
+        $providerProfile = ProviderProfileModel::find($work->provider_id);
+        $providerUserId = $providerProfile?->user_id ?? $work->provider_id;
 
-            $providerProfile->update([
-                'avg_rating' => round($avg, 2),
-                'total_reviews' => $count,
+        $rating = DB::transaction(function () use ($work, $user, $providerUserId, $providerProfile, $validated) {
+            $r = RatingModel::create([
+                'work_id' => $work->id,
+                'reviewer_id' => $user->id,
+                'reviewed_id' => $providerUserId,
+                'direction' => 'client_to_provider',
+                'score' => $validated['score'],
+                'comment' => $validated['comment'] ?? null,
             ]);
-        }
+
+            if ($providerProfile) {
+                $allRatings = RatingModel::where('reviewed_id', $providerUserId)->get();
+                $count = $allRatings->count();
+                $avg = $count > 0 ? round($allRatings->avg('score'), 2) : 5.0;
+
+                $providerProfile->update([
+                    'avg_rating' => $avg,
+                    'total_reviews' => $count,
+                ]);
+            }
+
+            return $r;
+        });
+
+        event(new \App\Domain\Ratings\Events\ReviewSubmitted($rating));
 
         return response()->json([
             'message' => 'Calificación enviada con éxito.',
-            'data' => $rating,
-        ]);
+            'data' => [
+                'id' => $rating->id,
+                'score' => $rating->score,
+                'comment' => $rating->comment,
+            ],
+        ], 200);
     }
 
     public function submitFinalQuote(string $id, Request $request): JsonResponse

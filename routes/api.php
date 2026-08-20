@@ -38,6 +38,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/categories', [\App\Http\Controllers\Api\V1\Providers\CategoryController::class, 'index'])->name('categories.index');
         Route::get('/providers', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'index'])->name('providers.index');
         Route::get('/providers/{uuid}', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'show'])->name('providers.show');
+        Route::get('/providers/{uuid}/reviews', [\App\Http\Controllers\Api\V1\Providers\ProviderController::class, 'reviews'])->name('providers.reviews');
 
         // Parser de solicitudes — público
         Route::post('/requests/parse', [\App\Http\Controllers\Api\V1\ServiceRequests\ParseRequestController::class, 'parse'])->name('requests.parse');
@@ -91,14 +92,28 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/conversations/{id}/messages', [\App\Http\Controllers\Api\V1\Conversations\ConversationController::class, 'messages'])->name('conversations.messages.index');
         Route::post('/conversations/{id}/messages', [\App\Http\Controllers\Api\V1\Conversations\ConversationController::class, 'sendMessage'])->name('conversations.messages.store');
 
-        // Provider Profile & Dashboard
+        // Provider Profile & Onboarding
         Route::get('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'show'])->name('provider.profile.show');
+        Route::post('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'update'])->name('provider.profile.store');
         Route::patch('/provider/profile', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'update'])->name('provider.profile.update');
+        Route::post('/provider/profile/portfolio', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'storePortfolioItem'])->name('provider.profile.portfolio.store');
+        Route::delete('/provider/profile/portfolio/{uuid}', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'deletePortfolioItem'])->name('provider.profile.portfolio.destroy');
+        Route::post('/provider/profile/documents', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'uploadDocument'])->name('provider.profile.documents.store');
+        Route::post('/provider/profile/submit-verification', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'submitVerification'])->name('provider.profile.submit-verification');
+
         Route::post('/provider/availability', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'availability'])->name('provider.availability');
         Route::get('/provider/work-requests', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'workRequests'])->name('provider.work-requests');
         Route::get('/provider/agenda', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'agenda'])->name('provider.agenda');
         Route::post('/provider/work-requests/{id}/confirm', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'confirmWorkRequest'])->name('provider.work-requests.confirm');
         Route::post('/provider/work-requests/{id}/decline', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'declineWorkRequest'])->name('provider.work-requests.decline');
+
+        // Admin Verification Panel
+        Route::get('/admin/providers/pending', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'pending'])->name('admin.providers.pending');
+        Route::get('/admin/providers/{uuid}', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'show'])->name('admin.providers.show');
+        Route::post('/admin/providers/{uuid}/verify', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'verify'])->name('admin.providers.verify');
+        Route::post('/admin/providers/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reject'])->name('admin.providers.reject');
+        Route::post('/admin/providers/{uuid}/suspend', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'suspend'])->name('admin.providers.suspend');
+        Route::post('/admin/providers/{uuid}/reactivate', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reactivate'])->name('admin.providers.reactivate');
     });
 
 });
