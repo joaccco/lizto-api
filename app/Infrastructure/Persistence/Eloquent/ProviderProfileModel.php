@@ -109,6 +109,11 @@ class ProviderProfileModel extends Model
         return $this->hasMany(RatingModel::class, 'reviewed_id', 'user_id')->orderBy('created_at', 'desc');
     }
 
+    public function works()
+    {
+        return $this->hasMany(WorkModel::class, 'provider_id');
+    }
+
     public function scopeEligibleForMatching($query)
     {
         return $query->where(function ($q) {

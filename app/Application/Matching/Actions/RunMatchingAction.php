@@ -105,6 +105,23 @@ final class RunMatchingAction
                       });
                 });
             })
+            ->whereDoesntHave('works', function ($q) use ($request) {
+                $q->whereIn('status', ['confirmed', 'in_progress']);
+
+                if ($request->scheduled_date) {
+                    $q->whereDate('scheduled_at', $request->scheduled_date);
+                }
+
+                if ($request->window_start && $request->window_end) {
+                    // Conflict check if existing work overlaps requested window
+                    $q->where(function ($wq) use ($request) {
+                        $wq->whereRaw("to_char(scheduled_at, 'HH24:MI') >= ? AND to_char(scheduled_at, 'HH24:MI') <= ?", [
+                            $request->window_start,
+                            $request->window_end,
+                        ]);
+                    });
+                }
+            })
             ->with(['categories' => function ($q) use ($request) {
                 $q->where('category_id', $request->category_id);
             }, 'user', 'serviceAreas'])

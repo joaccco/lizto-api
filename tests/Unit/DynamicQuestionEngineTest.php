@@ -144,6 +144,7 @@ class DynamicQuestionEngineTest extends TestCase
             'service_type_id' => $serviceType->id,
             'questionnaire_version_id' => $version->id,
             'raw_prompt' => 'Pérdida en cocina',
+            'urgency' => 'immediate',
             'status' => 'pending_survey',
         ]);
 

@@ -32,6 +32,17 @@ class DynamicQuestionEngine
             }
         }
 
+        // If category questions are completed, but timing/schedule hasn't been set, present service_schedule question
+        if (!isset($answersMap['service_schedule']) && !$request->scheduled_date && $request->urgency === \App\Domain\ServiceRequests\Enums\RequestUrgency::Scheduled) {
+            $timingQ = new QuestionModel();
+            $timingQ->id = 99999;
+            $timingQ->question_key = 'service_schedule';
+            $timingQ->question_text = '¿Cuándo necesitás resolverlo?';
+            $timingQ->input_type = 'single_select';
+            $timingQ->is_required = true;
+            return $timingQ;
+        }
+
         return null;
     }
 

@@ -13,6 +13,7 @@ use App\Domain\Clarification\Services\ServiceBriefBuilder;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Persistence\Eloquent\CategoryModel;
 use App\Infrastructure\Persistence\Eloquent\QuestionModel;
+use App\Infrastructure\Persistence\Eloquent\QuestionnaireVersionModel;
 use App\Infrastructure\Persistence\Eloquent\RequestAnswerModel;
 use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
 use App\Infrastructure\Persistence\Eloquent\ServiceTypeModel;
@@ -204,20 +205,78 @@ class ClarificationController extends Controller
             'answer_value' => 'required',
         ]);
 
-        $question = QuestionModel::findOrFail($validated['question_id']);
+        $questionKey = $request->input('question_key');
+        $rawQuestionId = (int) $validated['question_id'];
+
+        if ($rawQuestionId === 99999 || $questionKey === 'service_schedule') {
+            $questionKey = 'service_schedule';
+            $qObj = QuestionModel::where('question_key', 'service_schedule')->first() ?? QuestionModel::first();
+            if (!$qObj) {
+                $cat = CategoryModel::first() ?? CategoryModel::create(['name' => 'General', 'slug' => 'general']);
+                $st = ServiceTypeModel::first() ?? ServiceTypeModel::create([
+                    'category_id' => $cat->id,
+                    'name' => 'Servicios Generales',
+                    'slug' => 'servicios-generales',
+                ]);
+                $ver = QuestionnaireVersionModel::first() ?? QuestionnaireVersionModel::create([
+                    'service_type_id' => $serviceRequest->service_type_id ?? $st->id,
+                    'version_number' => 1,
+                    'status' => 'published',
+                ]);
+                $qObj = QuestionModel::create([
+                    'questionnaire_version_id' => $serviceRequest->questionnaire_version_id ?? $ver->id,
+                    'question_key' => 'service_schedule',
+                    'question_text' => '¿Cuándo necesitás resolverlo?',
+                    'input_type' => 'single_select',
+                    'position' => 99,
+                ]);
+            }
+            $questionId = $qObj->id;
+        } else {
+            $qObj = QuestionModel::find($rawQuestionId);
+            $questionKey = $qObj ? $qObj->question_key : ($questionKey ?? "q_{$rawQuestionId}");
+            $questionId = $qObj ? $qObj->id : (QuestionModel::first()?->id ?? 1);
+        }
 
         $ans = RequestAnswerModel::updateOrCreate(
             [
                 'service_request_id' => $serviceRequest->id,
-                'question_id' => $question->id,
+                'question_key' => $questionKey,
             ],
             [
-                'question_key' => $question->question_key,
+                'question_id' => $questionId,
+                'question_key' => $questionKey,
                 'answer_value' => $validated['answer_value'],
                 'source' => AnswerSource::User,
                 'confirmed_by_user' => true,
             ]
         );
+
+        if ($questionKey === 'service_schedule') {
+            $ansVal = $validated['answer_value'];
+            $timing = is_string($ansVal) ? $ansVal : ($ansVal['timing'] ?? $ansVal['urgency'] ?? 'scheduled');
+
+            $urgencyEnum = match ($timing) {
+                'immediate' => \App\Domain\ServiceRequests\Enums\RequestUrgency::Immediate,
+                'today' => \App\Domain\ServiceRequests\Enums\RequestUrgency::Today,
+                'scheduled' => \App\Domain\ServiceRequests\Enums\RequestUrgency::Scheduled,
+                default => \App\Domain\ServiceRequests\Enums\RequestUrgency::Scheduled,
+            };
+
+            $scheduledDate = is_array($ansVal) && isset($ansVal['scheduled_date'])
+                ? $ansVal['scheduled_date']
+                : (is_array($ansVal) && isset($ansVal['date']) ? $ansVal['date'] : ($timing === 'scheduled' ? null : now()->toDateString()));
+
+            $windowStart = is_array($ansVal) ? ($ansVal['window_start'] ?? null) : null;
+            $windowEnd = is_array($ansVal) ? ($ansVal['window_end'] ?? null) : null;
+
+            $serviceRequest->update([
+                'urgency' => $urgencyEnum,
+                'scheduled_date' => $scheduledDate,
+                'window_start' => $windowStart,
+                'window_end' => $windowEnd,
+            ]);
+        }
 
         event(new QuestionAnswered($serviceRequest, $ans));
 
