@@ -10,6 +10,7 @@ use App\Infrastructure\Persistence\Eloquent\ConversationModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 class ConversationController extends Controller
@@ -25,6 +26,8 @@ class ConversationController extends Controller
         if (!$conversation) {
             return response()->json(['message' => 'Conversación no encontrada.'], 404);
         }
+
+        Gate::authorize('view', $conversation);
 
         $user = $request->user();
         $messages = $conversation->messages()->with('sender')->get();
@@ -71,6 +74,8 @@ class ConversationController extends Controller
         if (!$conversation) {
             return response()->json(['message' => 'Conversación no encontrada.'], 404);
         }
+
+        Gate::authorize('sendMessage', $conversation);
 
         $workStatus = $conversation->work?->status?->value ?? $conversation->serviceRequest?->status?->value ?? 'confirmed';
         if (in_array($workStatus, ['completed', 'cancelled'], true)) {
