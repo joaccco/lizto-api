@@ -23,7 +23,7 @@ class AuthController extends Controller
             'status'   => 'active',
         ]);
 
-        $user->assignRole($request->role);
+        $user->assignRole('client');
 
         $token = $user->createToken('auth_token')->plainTextToken;
 

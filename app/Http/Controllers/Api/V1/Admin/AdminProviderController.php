@@ -108,6 +108,8 @@ class AdminProviderController extends Controller
             'suspension_reason' => null,
         ]);
 
+        $profile->user?->assignRole('provider');
+
         return response()->json([
             'message' => 'Perfil del profesional verificado y habilitado para trabajos.',
             'data' => [
@@ -132,6 +134,8 @@ class AdminProviderController extends Controller
             'rejected_at' => now(),
             'rejection_reason' => $validated['reason'],
         ]);
+
+        $profile->user?->removeRole('provider');
 
         return response()->json([
             'message' => 'Perfil del profesional rechazado.',
@@ -158,6 +162,8 @@ class AdminProviderController extends Controller
             'suspension_reason' => $validated['reason'],
         ]);
 
+        $profile->user?->removeRole('provider');
+
         return response()->json([
             'message' => 'Perfil del profesional suspendido.',
             'data' => [
@@ -178,6 +184,8 @@ class AdminProviderController extends Controller
             'suspended_at' => null,
             'suspension_reason' => null,
         ]);
+
+        $profile->user?->assignRole('provider');
 
         return response()->json([
             'message' => 'Perfil del profesional reactivado exitosamente.',
