@@ -17,6 +17,9 @@ class OfferModel extends Model
         'rejection_reason',
         'pricing_mode',
         'proposed_price',
+        'price_min',
+        'price_max',
+        'notes',
         'currency_code',
         'proposed_start_at',
         'estimated_duration_min',
@@ -26,6 +29,8 @@ class OfferModel extends Model
     protected $casts = [
         'status' => OfferStatus::class,
         'proposed_price' => 'decimal:2',
+        'price_min' => 'integer',
+        'price_max' => 'integer',
         'proposed_start_at' => 'datetime',
         'estimated_duration_min' => 'integer',
         'round_number' => 'integer',

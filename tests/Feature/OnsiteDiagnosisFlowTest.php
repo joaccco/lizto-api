@@ -50,6 +50,7 @@ class OnsiteDiagnosisFlowTest extends TestCase
             'uuid' => (string) Str::uuid(),
             'bio' => 'Plomero profesional',
             'is_verified' => true,
+            'status' => 'verified',
             'coverage_radius_km' => 15,
         ]);
 
@@ -65,6 +66,8 @@ class OnsiteDiagnosisFlowTest extends TestCase
         // 1. Provider creates Offer -> defaults to requires_visit because water_leak requires onsite diagnosis
         $resOffer = $this->actingAs($providerUser, 'sanctum')->postJson("/api/v1/service-requests/{$serviceRequest->uuid}/offers", [
             'currency_code' => 'ARS',
+            'price_min' => 10000,
+            'price_max' => 20000,
         ]);
 
         $resOffer->assertStatus(201)
@@ -130,6 +133,7 @@ class OnsiteDiagnosisFlowTest extends TestCase
             'uuid' => (string) Str::uuid(),
             'bio' => 'Plomero profesional',
             'is_verified' => true,
+            'status' => 'verified',
             'coverage_radius_km' => 15,
         ]);
 

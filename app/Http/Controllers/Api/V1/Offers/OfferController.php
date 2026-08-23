@@ -54,6 +54,25 @@ class OfferController extends Controller
             return response()->json(['message' => 'Solo los profesionales verificados pueden realizar ofertas.'], 403);
         }
 
+        $allowedKeys = [
+            'pricing_mode',
+            'proposed_price',
+            'price_min',
+            'price_max',
+            'currency_code',
+            'proposed_start_at',
+            'estimated_duration_min',
+            'notes',
+        ];
+
+        $unknownKeys = array_diff(array_keys($request->all()), $allowedKeys);
+        if (!empty($unknownKeys)) {
+            return response()->json([
+                'message' => 'Campos no permitidos en el cuerpo del pedido.',
+                'errors' => ['request' => ['Campos desconocidos detectados: ' . implode(', ', $unknownKeys)]],
+            ], 422);
+        }
+
         // Determine default pricing_mode from ServiceType
         $defaultPricingMode = 'quoted';
         if ($serviceRequest->serviceType && $serviceRequest->serviceType->requires_onsite_diagnosis) {
@@ -63,15 +82,33 @@ class OfferController extends Controller
         $validated = $request->validate([
             'pricing_mode' => 'nullable|in:quoted,requires_visit',
             'proposed_price' => 'nullable|numeric|min:0',
+            'price_min' => 'nullable|integer|min:0',
+            'price_max' => 'nullable|integer|min:0',
             'currency_code' => 'nullable|string|size:3',
             'proposed_start_at' => 'nullable|date',
             'estimated_duration_min' => 'nullable|integer|min:1',
+            'notes' => 'nullable|string|max:1000',
         ]);
 
         $pricingMode = $validated['pricing_mode'] ?? $defaultPricingMode;
 
-        if ($pricingMode === 'quoted' && (!isset($validated['proposed_price']) || $validated['proposed_price'] === null)) {
-            return response()->json(['message' => 'El precio propuesto es obligatorio para ofertas cotizadas a distancia.'], 422);
+        if ($pricingMode === 'quoted') {
+            if (!isset($validated['proposed_price']) || $validated['proposed_price'] === null) {
+                return response()->json(['message' => 'El precio propuesto es obligatorio para ofertas cotizadas.'], 422);
+            }
+            if (isset($validated['price_min']) || isset($validated['price_max'])) {
+                return response()->json(['message' => 'El rango de precios (price_min/price_max) no es permitido en modalidad quoted.'], 422);
+            }
+        } elseif ($pricingMode === 'requires_visit') {
+            if (!isset($validated['price_min']) || !isset($validated['price_max'])) {
+                return response()->json(['message' => 'El rango estimado (price_min y price_max) es obligatorio para ofertas que requieren visita.'], 422);
+            }
+            if (isset($validated['proposed_price']) && $validated['proposed_price'] !== null) {
+                return response()->json(['message' => 'El precio exacto (proposed_price) no es permitido en modalidad requires_visit.'], 422);
+            }
+            if ((int) $validated['price_min'] > (int) $validated['price_max']) {
+                return response()->json(['message' => 'El precio mínimo no puede superar al precio máximo.'], 422);
+            }
         }
 
         $offer = OfferModel::create([
@@ -80,7 +117,10 @@ class OfferController extends Controller
             'provider_id' => $provider->id,
             'status' => OfferStatus::Pending,
             'pricing_mode' => $pricingMode,
-            'proposed_price' => $validated['proposed_price'] ?? null,
+            'proposed_price' => $pricingMode === 'quoted' ? ($validated['proposed_price'] ?? null) : null,
+            'price_min' => $pricingMode === 'requires_visit' ? ($validated['price_min'] ?? null) : null,
+            'price_max' => $pricingMode === 'requires_visit' ? ($validated['price_max'] ?? null) : null,
+            'notes' => $validated['notes'] ?? null,
             'currency_code' => $validated['currency_code'] ?? 'ARS',
             'proposed_start_at' => $validated['proposed_start_at'] ?? null,
             'estimated_duration_min' => $validated['estimated_duration_min'] ?? null,
@@ -95,6 +135,9 @@ class OfferController extends Controller
                 'status' => $offer->status->value,
                 'pricing_mode' => $offer->pricing_mode,
                 'proposed_price' => $offer->proposed_price,
+                'price_min' => $offer->price_min,
+                'price_max' => $offer->price_max,
+                'notes' => $offer->notes,
                 'currency_code' => $offer->currency_code,
                 'round_number' => $offer->round_number,
             ],
