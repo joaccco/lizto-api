@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Offers;
 use App\Application\Works\Actions\CreateWorkAction;
 use App\Domain\Clarification\Enums\AnswerSource;
 use App\Domain\Offers\Enums\OfferStatus;
+use App\Domain\Providers\Enums\ProviderProfileStatus;
 use App\Domain\Offers\Events\OfferAccepted;
 use App\Domain\Offers\Events\OfferCountered;
 use App\Domain\Offers\Events\OfferCreated;
@@ -42,8 +43,16 @@ class OfferController extends Controller
 
         $user = $request->user();
 
-        $provider = ProviderProfileModel::where('user_id', $user->id)->first()
-            ?? ProviderProfileModel::first();
+        $provider = ProviderProfileModel::where('user_id', $user->id)->first();
+
+        if (!$provider) {
+            return response()->json(['message' => 'Solo los usuarios con perfil de profesional pueden realizar ofertas.'], 403);
+        }
+
+        $statusVal = $provider->status instanceof \BackedEnum ? $provider->status->value : $provider->status;
+        if ($statusVal !== ProviderProfileStatus::Verified->value && !$provider->is_verified) {
+            return response()->json(['message' => 'Solo los profesionales verificados pueden realizar ofertas.'], 403);
+        }
 
         // Determine default pricing_mode from ServiceType
         $defaultPricingMode = 'quoted';
