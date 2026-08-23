@@ -67,11 +67,12 @@ class ProviderDashboardController extends Controller
             ->limit(10)
             ->get();
 
-        $items = $requests->map(function ($sr) use ($providerProfile) {
+        $items = $requests->map(function ($sr) use ($user) {
             $work = $sr->works->first();
             $effectiveStatus = $work ? $work->status->value : ($sr->status instanceof \BackedEnum ? $sr->status->value : $sr->status);
+            $locationData = \App\Domain\Location\Services\LocationPresenter::present($sr, $user);
 
-            return [
+            return array_merge([
                 'id' => $sr->uuid,
                 'work_id' => $work?->uuid,
                 'conversation_id' => $work?->conversation?->uuid,
@@ -80,14 +81,10 @@ class ProviderDashboardController extends Controller
                 'raw_prompt' => $sr->raw_prompt,
                 'client_name' => $sr->client ? explode(' ', $sr->client->name)[0] : 'Cliente',
                 'urgency' => $sr->urgency instanceof \BackedEnum ? $sr->urgency->value : $sr->urgency,
-                'location' => $sr->location_address ?? 'Centro',
-                'location_lat' => $sr->location_lat ? (float) $sr->location_lat : ($work?->work_lat ? (float) $work->work_lat : -27.4692),
-                'location_lng' => $sr->location_lng ? (float) $sr->location_lng : ($work?->work_lng ? (float) $work->work_lng : -58.8306),
-                'location_address' => $sr->location_address ?? 'Centro',
                 'status' => $effectiveStatus,
                 'estimated_duration_min' => $work?->estimated_duration_min ?? 60,
                 'created_at' => $sr->created_at?->toISOString(),
-            ];
+            ], $locationData);
         });
 
         return response()->json(['data' => $items]);
@@ -180,7 +177,7 @@ class ProviderDashboardController extends Controller
             [
                 'uuid' => (string) \Illuminate\Support\Str::uuid(),
                 'status' => \App\Domain\Offers\Enums\OfferStatus::Pending,
-                'proposed_price' => 0.00,
+                'proposed_price' => $request->input('proposed_price', 15000.00),
                 'currency_code' => 'ARS',
                 'estimated_duration_min' => $estimatedDuration,
                 'proposed_start_at' => $scheduledAtInput,

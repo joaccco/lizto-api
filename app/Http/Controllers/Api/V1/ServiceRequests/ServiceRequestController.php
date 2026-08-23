@@ -135,8 +135,10 @@ class ServiceRequestController extends Controller
             $conversationId = $conv->uuid;
         }
 
+        $locationData = \App\Domain\Location\Services\LocationPresenter::present($sr, $request->user());
+
         return response()->json([
-            'data' => [
+            'data' => array_merge([
                 'id' => $sr->uuid,
                 'uuid' => $sr->uuid,
                 'raw_prompt' => $sr->raw_prompt,
@@ -146,7 +148,6 @@ class ServiceRequestController extends Controller
                 'scheduled_date' => $sr->scheduled_date?->toDateString(),
                 'window_start' => $sr->window_start,
                 'window_end' => $sr->window_end,
-                'address' => $sr->location_address ?? 'Centro',
                 'created_at' => $sr->created_at?->toISOString(),
                 'conversation_id' => $conversationId,
                 'category' => $sr->category ? [
@@ -169,7 +170,7 @@ class ServiceRequestController extends Controller
                     'price_to' => $provider->price_to ?? 35000,
                     'response_time' => $provider->avg_response_minutes ? "~{$provider->avg_response_minutes} min" : "~10 min",
                 ] : null,
-            ],
+            ], $locationData),
         ]);
     }
 
