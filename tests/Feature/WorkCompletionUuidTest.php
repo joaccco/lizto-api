@@ -95,15 +95,16 @@ class WorkCompletionUuidTest extends TestCase
 
         // 4. POSITIVE TEST: Calling /works/{work.uuid}/complete with valid work.uuid succeeds with 200
         $targetWork = WorkModel::where('uuid', $workUuid)->first();
-        $quote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
-            'uuid' => (string) Str::uuid(),
-            'work_id' => $targetWork->id,
-            'provider_id' => $targetWork->provider_id,
-            'client_id' => $targetWork->client_id,
-            'amount' => 10000,
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
+        $quote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::firstOrCreate(
+            ['work_id' => $targetWork->id, 'status' => 'accepted'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'provider_id' => $targetWork->provider_id,
+                'client_id' => $targetWork->client_id,
+                'amount' => 10000,
+                'accepted_at' => now(),
+            ]
+        );
         $targetWork->status = WorkStatus::InProgress;
         $targetWork->save();
         $targetWork->applyAcceptedQuote($quote);

@@ -73,38 +73,55 @@ class WorkQuoteController extends Controller
 
     public function accept(string $workUuid, string $quoteUuid, Request $request): JsonResponse
     {
-        $work = WorkModel::where('uuid', $workUuid)->firstOrFail();
         $user = $request->user();
 
-        if (!$this->isWorkClient($user, $work)) {
-            return response()->json(['message' => 'Solo el cliente del trabajo puede aceptar presupuestos.'], 403);
-        }
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($workUuid, $quoteUuid, $user) {
+            $work = WorkModel::where('uuid', $workUuid)->lockForUpdate()->first();
+            if (!$work) {
+                return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+            }
 
-        if ($this->isWorkClosed($work)) {
-            return response()->json(['message' => 'No se pueden procesar presupuestos para trabajos finalizados o cancelados.'], 422);
-        }
+            if (!$this->isWorkClient($user, $work)) {
+                return response()->json(['message' => 'Solo el cliente del trabajo puede aceptar presupuestos.'], 403);
+            }
 
-        $quote = WorkQuoteModel::where('uuid', $quoteUuid)->where('work_id', $work->id)->firstOrFail();
+            if ($this->isWorkClosed($work)) {
+                return response()->json(['message' => 'No se pueden procesar presupuestos para trabajos finalizados o cancelados.'], 422);
+            }
 
-        if ($quote->status !== 'pending') {
-            return response()->json(['message' => 'Solo se pueden aceptar o rechazar presupuestos en estado pendiente.'], 422);
-        }
+            $quote = WorkQuoteModel::where('uuid', $quoteUuid)->where('work_id', $work->id)->first();
+            if (!$quote) {
+                return response()->json(['message' => 'Presupuesto no encontrado.'], 404);
+            }
 
-        if ($quote->valid_until !== null && $quote->valid_until->isPast()) {
-            return response()->json(['message' => 'El presupuesto ha vencido y no puede ser aceptado.'], 422);
-        }
+            if ($quote->status !== 'pending') {
+                return response()->json(['message' => 'Solo se pueden aceptar o rechazar presupuestos en estado pendiente.'], 422);
+            }
 
-        $quote->update([
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
+            if ($quote->valid_until !== null && $quote->valid_until->isPast()) {
+                return response()->json(['message' => 'El presupuesto ha vencido y no puede ser aceptado.'], 422);
+            }
 
-        $work->applyAcceptedQuote($quote);
+            $hasAcceptedQuote = WorkQuoteModel::where('work_id', $work->id)
+                ->where('status', 'accepted')
+                ->exists();
 
-        return response()->json([
-            'data' => $this->formatQuote($quote),
-            'message' => 'Presupuesto aceptado correctamente.',
-        ]);
+            if ($hasAcceptedQuote) {
+                return response()->json(['message' => 'El trabajo ya posee un presupuesto aceptado.'], 422);
+            }
+
+            $quote->update([
+                'status' => 'accepted',
+                'accepted_at' => now(),
+            ]);
+
+            $work->applyAcceptedQuote($quote);
+
+            return response()->json([
+                'data' => $this->formatQuote($quote),
+                'message' => 'Presupuesto aceptado correctamente.',
+            ]);
+        });
     }
 
     public function reject(string $workUuid, string $quoteUuid, Request $request): JsonResponse

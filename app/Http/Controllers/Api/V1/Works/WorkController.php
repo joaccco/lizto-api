@@ -157,6 +157,14 @@ class WorkController extends Controller
 
         \Illuminate\Support\Facades\Gate::authorize('submitFinalQuote', $work);
 
+        $hasAcceptedQuote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::where('work_id', $work->id)
+            ->where('status', 'accepted')
+            ->exists();
+
+        if ($hasAcceptedQuote) {
+            return response()->json(['message' => 'El trabajo ya posee un presupuesto aceptado.'], 422);
+        }
+
         $validated = $request->validate([
             'final_price' => 'required|numeric|min:0',
         ]);
@@ -185,6 +193,14 @@ class WorkController extends Controller
         }
 
         \Illuminate\Support\Facades\Gate::authorize('confirmFinalQuote', $work);
+
+        $hasAcceptedQuote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::where('work_id', $work->id)
+            ->where('status', 'accepted')
+            ->exists();
+
+        if ($hasAcceptedQuote) {
+            return response()->json(['message' => 'El trabajo ya posee un presupuesto aceptado.'], 422);
+        }
 
         if (empty($work->final_price) || $work->final_price <= 0) {
             return response()->json(['message' => 'No hay un presupuesto final cargado para confirmar.'], 422);

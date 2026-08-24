@@ -104,27 +104,29 @@ class MultipleProviderWorksTest extends TestCase
         $this->assertCount(2, $confirmedWorks);
 
         $w1 = WorkModel::where('uuid', $work1Uuid)->first();
-        $quote1 = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
-            'uuid' => (string) Str::uuid(),
-            'work_id' => $w1->id,
-            'provider_id' => $w1->provider_id,
-            'client_id' => $w1->client_id,
-            'amount' => 10000,
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
+        $quote1 = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::firstOrCreate(
+            ['work_id' => $w1->id, 'status' => 'accepted'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'provider_id' => $w1->provider_id,
+                'client_id' => $w1->client_id,
+                'amount' => 10000,
+                'accepted_at' => now(),
+            ]
+        );
         $w1->applyAcceptedQuote($quote1);
 
         $w2 = WorkModel::where('uuid', $work2Uuid)->first();
-        $quote2 = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
-            'uuid' => (string) Str::uuid(),
-            'work_id' => $w2->id,
-            'provider_id' => $w2->provider_id,
-            'client_id' => $w2->client_id,
-            'amount' => 12000,
-            'status' => 'accepted',
-            'accepted_at' => now(),
-        ]);
+        $quote2 = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::firstOrCreate(
+            ['work_id' => $w2->id, 'status' => 'accepted'],
+            [
+                'uuid' => (string) Str::uuid(),
+                'provider_id' => $w2->provider_id,
+                'client_id' => $w2->client_id,
+                'amount' => 12000,
+                'accepted_at' => now(),
+            ]
+        );
         $w2->applyAcceptedQuote($quote2);
 
         // 4. Complete Work 1 -> Work 2 remains active
