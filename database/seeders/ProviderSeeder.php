@@ -54,6 +54,10 @@ class ProviderSeeder extends Seeder
                 ]
             );
 
+            // El rol provider es condicion para acceder a las pantallas del
+            // profesional. Sin esto el seeder produce proveedores inutilizables.
+            $user->assignRole('provider');
+
             $profile = ProviderProfileModel::updateOrCreate(
                 ['user_id' => $user->id],
                 collect($data)->only([
@@ -61,6 +65,11 @@ class ProviderSeeder extends Seeder
                     'total_jobs_completed', 'completion_rate', 'cancellation_count', 'response_rate',
                     'avg_response_minutes', 'base_lat', 'base_lng', 'base_address', 'availability_status',
                     'busy_until', 'next_available_at'
+                ])->merge([
+                    // is_verified no alcanza: emitir ofertas exige status = verified.
+                    'status' => $data['is_verified']
+                        ? \App\Domain\Providers\Enums\ProviderProfileStatus::Verified->value
+                        : \App\Domain\Providers\Enums\ProviderProfileStatus::PendingVerification->value,
                 ])->all()
             );
 

@@ -11,10 +11,12 @@ class ClientUserSeeder extends Seeder
     public function run(): void
     {
         foreach ([['Juan Pérez', 'juan@test.com'], ['María García', 'maria@test.com'], ['Carlos López', 'carlos@test.com']] as [$name, $email]) {
-            UserModel::updateOrCreate(
+            $user = UserModel::updateOrCreate(
                 ['email' => $email],
                 ['name' => $name, 'password' => Hash::make('password'), 'status' => 'active']
             );
+
+            $user->assignRole('client');
         }
     }
 }

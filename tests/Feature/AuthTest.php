@@ -55,11 +55,9 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertStatus(201);
-        $this->assertTrue(
-            UserModel::where('email', 'roberto-auth@test.com')
-                     ->first()
-                     ->hasRole('provider')
-        );
+        $user = UserModel::where('email', 'roberto-auth@test.com')->first();
+        $this->assertTrue($user->hasRole('client'));
+        $this->assertFalse($user->hasRole('provider'));
     }
 
     public function test_user_can_login(): void
