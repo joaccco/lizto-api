@@ -40,4 +40,20 @@ class WorkPolicy
     {
         return $work->client_id === $user->id;
     }
+
+    public function submitFinalQuote(UserModel $user, WorkModel $work): bool
+    {
+        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
+        return $providerProfile !== null && (int) $work->provider_id === (int) $providerProfile->id;
+    }
+
+    public function confirmFinalQuote(UserModel $user, WorkModel $work): bool
+    {
+        return (int) $work->client_id === (int) $user->id;
+    }
+
+    public function rejectFinalQuote(UserModel $user, WorkModel $work): bool
+    {
+        return (int) $work->client_id === (int) $user->id;
+    }
 }

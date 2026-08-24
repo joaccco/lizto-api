@@ -103,6 +103,30 @@ class MultipleProviderWorksTest extends TestCase
         $confirmedWorks = array_filter($items, fn($i) => $i['status'] === 'confirmed');
         $this->assertCount(2, $confirmedWorks);
 
+        $w1 = WorkModel::where('uuid', $work1Uuid)->first();
+        $quote1 = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
+            'uuid' => (string) Str::uuid(),
+            'work_id' => $w1->id,
+            'provider_id' => $w1->provider_id,
+            'client_id' => $w1->client_id,
+            'amount' => 10000,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+        $w1->applyAcceptedQuote($quote1);
+
+        $w2 = WorkModel::where('uuid', $work2Uuid)->first();
+        $quote2 = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
+            'uuid' => (string) Str::uuid(),
+            'work_id' => $w2->id,
+            'provider_id' => $w2->provider_id,
+            'client_id' => $w2->client_id,
+            'amount' => 12000,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+        $w2->applyAcceptedQuote($quote2);
+
         // 4. Complete Work 1 -> Work 2 remains active
         $resComp1 = $this->actingAs($providerUser, 'sanctum')->postJson("/api/v1/works/{$work1Uuid}/complete");
         $resComp1->assertStatus(200);

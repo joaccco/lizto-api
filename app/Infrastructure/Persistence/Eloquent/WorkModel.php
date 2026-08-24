@@ -8,8 +8,42 @@ use Illuminate\Database\Eloquent\Model;
 class WorkModel extends Model
 {
     protected $table = 'works';
-    protected $fillable = ['uuid','service_request_id','match_card_id','client_id','provider_id','status','scheduled_at','started_at','completed_at','estimated_duration_min','estimated_completion_at','work_lat','work_lng','work_address','agreed_price','final_price','currency'];
-    protected function casts(): array { return ['status' => WorkStatus::class, 'scheduled_at' => 'datetime', 'started_at' => 'datetime', 'completed_at' => 'datetime', 'estimated_completion_at' => 'datetime', 'final_price' => 'decimal:2', 'agreed_price' => 'decimal:2']; }
+
+    // Note: agreed_price and is_legacy_pre_quote are explicitly excluded from fillable
+    // to prevent accidental mass assignment. agreed_price is derived solely from an accepted WorkQuote.
+    protected $fillable = [
+        'uuid',
+        'service_request_id',
+        'match_card_id',
+        'client_id',
+        'provider_id',
+        'status',
+        'scheduled_at',
+        'started_at',
+        'completed_at',
+        'estimated_duration_min',
+        'estimated_completion_at',
+        'work_lat',
+        'work_lng',
+        'work_address',
+        'final_price',
+        'currency',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'status' => WorkStatus::class,
+            'scheduled_at' => 'datetime',
+            'started_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'estimated_completion_at' => 'datetime',
+            'final_price' => 'decimal:2',
+            'agreed_price' => 'decimal:2',
+            'is_legacy_pre_quote' => 'boolean',
+        ];
+    }
+
     public function serviceRequest() { return $this->belongsTo(ServiceRequestModel::class, 'service_request_id'); }
     public function matchCard() { return $this->belongsTo(MatchCardModel::class, 'match_card_id'); }
     public function client() { return $this->belongsTo(UserModel::class, 'client_id'); }
@@ -17,6 +51,14 @@ class WorkModel extends Model
     public function conversation() { return $this->hasOne(ConversationModel::class, 'work_id'); }
     public function events() { return $this->hasMany(WorkEventModel::class, 'work_id'); }
     public function ratings() { return $this->hasMany(RatingModel::class, 'work_id'); }
+    public function quotes() { return $this->hasMany(WorkQuoteModel::class, 'work_id'); }
+    public function acceptedQuote() { return $this->hasOne(WorkQuoteModel::class, 'work_id')->where('status', 'accepted'); }
+
+    public function applyAcceptedQuote(WorkQuoteModel $quote): void
+    {
+        $this->agreed_price = $quote->amount;
+        $this->save();
+    }
 
     public function transitionTo(WorkStatus|string $targetStatus): void
     {

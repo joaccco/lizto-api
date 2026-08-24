@@ -9,6 +9,7 @@ use App\Infrastructure\Persistence\Eloquent\WorkModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WorkController extends Controller
 {
@@ -23,6 +24,8 @@ class WorkController extends Controller
         }
 
         \Illuminate\Support\Facades\Gate::authorize('complete', $work);
+
+        \App\Domain\Works\Policies\WorkCompletionPolicy::validateCanComplete($work);
 
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Completed);
         $work->update([
@@ -152,6 +155,8 @@ class WorkController extends Controller
             return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
+        \Illuminate\Support\Facades\Gate::authorize('submitFinalQuote', $work);
+
         $validated = $request->validate([
             'final_price' => 'required|numeric|min:0',
         ]);
@@ -179,14 +184,27 @@ class WorkController extends Controller
             return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
+        \Illuminate\Support\Facades\Gate::authorize('confirmFinalQuote', $work);
+
         if (empty($work->final_price) || $work->final_price <= 0) {
             return response()->json(['message' => 'No hay un presupuesto final cargado para confirmar.'], 422);
         }
 
-        $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Confirmed);
-        $work->update([
-            'agreed_price' => $work->final_price,
+        $quote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
+            'uuid' => (string) Str::uuid(),
+            'work_id' => $work->id,
+            'provider_id' => $work->provider_id,
+            'client_id' => $work->client_id,
+            'amount' => $work->final_price,
+            'currency' => $work->currency ?? 'ARS',
+            'terms_conditions' => 'Presupuesto final de diagnóstico presencial confirmado',
+            'origin' => 'final_quote_confirmation',
+            'status' => 'accepted',
+            'accepted_at' => now(),
         ]);
+
+        $work->applyAcceptedQuote($quote);
+        $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Confirmed);
 
         event(new \App\Domain\Works\Events\FinalQuoteConfirmed($work));
 
@@ -206,6 +224,8 @@ class WorkController extends Controller
         if (!$work) {
             return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
+
+        \Illuminate\Support\Facades\Gate::authorize('rejectFinalQuote', $work);
 
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Cancelled);
 

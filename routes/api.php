@@ -79,6 +79,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/works/{id}/final-quote/confirm', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'confirmFinalQuote'])->name('works.final-quote.confirm');
         Route::post('/works/{id}/final-quote/reject', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rejectFinalQuote'])->name('works.final-quote.reject');
         Route::get('/works/{id}/progress', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'progress'])->name('works.progress');
+        Route::get('/works/{id}/quotes', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'index'])->name('works.quotes.index');
+        Route::post('/works/{id}/quotes', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'store'])->name('works.quotes.store');
+        Route::post('/works/{id}/quotes/{quote_uuid}/accept', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'accept'])->name('works.quotes.accept');
+        Route::post('/works/{id}/quotes/{quote_uuid}/reject', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'reject'])->name('works.quotes.reject');
 
         // Offers (Bloque A)
         Route::post('/service-requests/{id}/offers', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'store'])->name('offers.store');

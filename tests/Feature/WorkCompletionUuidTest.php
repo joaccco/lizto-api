@@ -10,6 +10,7 @@ use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
 use App\Infrastructure\Persistence\Eloquent\UserModel;
 use App\Infrastructure\Persistence\Eloquent\WorkModel;
 use Database\Seeders\ClarificationEngineSeeder;
+use App\Domain\Works\Enums\WorkStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -93,6 +94,20 @@ class WorkCompletionUuidTest extends TestCase
             ->assertJsonPath('message', 'Trabajo no encontrado.');
 
         // 4. POSITIVE TEST: Calling /works/{work.uuid}/complete with valid work.uuid succeeds with 200
+        $targetWork = WorkModel::where('uuid', $workUuid)->first();
+        $quote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
+            'uuid' => (string) Str::uuid(),
+            'work_id' => $targetWork->id,
+            'provider_id' => $targetWork->provider_id,
+            'client_id' => $targetWork->client_id,
+            'amount' => 10000,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+        $targetWork->status = WorkStatus::InProgress;
+        $targetWork->save();
+        $targetWork->applyAcceptedQuote($quote);
+
         $resPositive = $this->actingAs($providerUser, 'sanctum')
             ->postJson("/api/v1/works/{$workUuid}/complete");
 

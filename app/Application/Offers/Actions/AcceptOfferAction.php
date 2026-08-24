@@ -65,11 +65,25 @@ class AcceptOfferAction
             // 6. Create Work via CreateWorkAction with resolved match_card_id
             $work = $this->createWorkAction->execute($offer, $matchCard?->id);
 
-            if ($offer->pricing_mode === 'requires_visit' && (empty($offer->proposed_price) || $offer->proposed_price <= 0)) {
+            if ($offer->pricing_mode === 'requires_visit' || empty($offer->proposed_price) || $offer->proposed_price <= 0) {
                 $work->update([
                     'status' => \App\Domain\Works\Enums\WorkStatus::PendingDiagnosisQuote,
                 ]);
                 event(new \App\Domain\Works\Events\DiagnosisVisitRequested($work));
+            } else {
+                $quote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::create([
+                    'uuid' => (string) Str::uuid(),
+                    'work_id' => $work->id,
+                    'provider_id' => $work->provider_id,
+                    'client_id' => $work->client_id,
+                    'amount' => $offer->proposed_price,
+                    'currency' => $offer->currency_code ?? 'ARS',
+                    'terms_conditions' => 'Oferta con precio acordado aceptada',
+                    'origin' => 'offer_acceptance',
+                    'status' => 'accepted',
+                    'accepted_at' => now(),
+                ]);
+                $work->applyAcceptedQuote($quote);
             }
 
             // 7. Create Conversation automatically

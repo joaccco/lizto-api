@@ -9,6 +9,7 @@ use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
 use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
 use App\Infrastructure\Persistence\Eloquent\UserModel;
 use App\Infrastructure\Persistence\Eloquent\WorkModel;
+use App\Infrastructure\Persistence\Eloquent\WorkQuoteModel;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -80,6 +81,17 @@ class StateTransitionTest extends TestCase
             'status' => 'cancelled',
         ]);
 
+        $quote = WorkQuoteModel::create([
+            'uuid' => (string) Str::uuid(),
+            'work_id' => $work->id,
+            'provider_id' => $providerProfile->id,
+            'client_id' => $client->id,
+            'amount' => 15000,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+        $work->applyAcceptedQuote($quote);
+
         Sanctum::actingAs($providerUser);
 
         // Attempting to complete a cancelled work is an invalid transition -> 409
@@ -128,6 +140,17 @@ class StateTransitionTest extends TestCase
             'provider_id' => $providerProfile->id,
             'status' => 'in_progress',
         ]);
+
+        $quote = WorkQuoteModel::create([
+            'uuid' => (string) Str::uuid(),
+            'work_id' => $work->id,
+            'provider_id' => $providerProfile->id,
+            'client_id' => $client->id,
+            'amount' => 15000,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+        $work->applyAcceptedQuote($quote);
 
         Sanctum::actingAs($providerUser);
 
