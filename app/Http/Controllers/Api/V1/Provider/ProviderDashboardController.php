@@ -84,6 +84,7 @@ class ProviderDashboardController extends Controller
                 'status' => $effectiveStatus,
                 'estimated_duration_min' => $work?->estimated_duration_min ?? 60,
                 'created_at' => $sr->created_at?->toISOString(),
+                'schedule' => static::formatScheduleBlock($sr),
             ], $locationData);
         });
 
@@ -124,10 +125,85 @@ class ProviderDashboardController extends Controller
                 'time' => $scheduledAt?->format('H:i') ?? '09:00',
                 'estimated_duration_min' => $work->estimated_duration_min ?? 60,
                 'agreed_price' => $work->agreed_price,
+                'schedule' => static::formatScheduleBlock($work->serviceRequest),
             ];
         });
 
         return response()->json(['data' => $events]);
+    }
+
+    public static function formatScheduleBlock(?ServiceRequestModel $sr): array
+    {
+        if (!$sr) {
+            return [
+                'scheduled_date' => null,
+                'window_start' => null,
+                'window_end' => null,
+                'label' => 'A coordinar',
+            ];
+        }
+
+        $urgencyVal = $sr->urgency instanceof \BackedEnum ? $sr->urgency->value : (string) $sr->urgency;
+        $scheduledDateStr = $sr->scheduled_date
+            ? $sr->scheduled_date->format('Y-m-d')
+            : ($sr->preferred_datetime ? $sr->preferred_datetime->format('Y-m-d') : null);
+
+        $windowStart = $sr->window_start;
+        $windowEnd = $sr->window_end;
+
+        if ($urgencyVal === 'immediate') {
+            return [
+                'scheduled_date' => null,
+                'window_start' => null,
+                'window_end' => null,
+                'label' => 'Atención inmediata',
+            ];
+        }
+
+        if ($urgencyVal === 'today') {
+            $rangeStr = ($windowStart && $windowEnd) ? " de {$windowStart} a {$windowEnd} hs" : "";
+            return [
+                'scheduled_date' => $scheduledDateStr,
+                'window_start' => $windowStart,
+                'window_end' => $windowEnd,
+                'label' => "Hoy{$rangeStr}",
+            ];
+        }
+
+        if ($urgencyVal === 'scheduled') {
+            if ($sr->preferred_datetime || $sr->scheduled_date) {
+                $dt = $sr->preferred_datetime ?? $sr->scheduled_date;
+                $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                $months = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+                $dayName = $days[(int) $dt->format('w')];
+                $dayNum = (int) $dt->format('j');
+                $monthName = $months[(int) $dt->format('n')];
+
+                $rangeStr = ($windowStart && $windowEnd) ? " de {$windowStart} a {$windowEnd} hs" : ($dt->format('H:i') !== '00:00' ? " a las {$dt->format('H:i')} hs" : "");
+
+                return [
+                    'scheduled_date' => $scheduledDateStr,
+                    'window_start' => $windowStart,
+                    'window_end' => $windowEnd,
+                    'label' => "{$dayName} {$dayNum} de {$monthName}{$rangeStr}",
+                ];
+            }
+
+            return [
+                'scheduled_date' => null,
+                'window_start' => $windowStart,
+                'window_end' => $windowEnd,
+                'label' => 'A coordinar',
+            ];
+        }
+
+        return [
+            'scheduled_date' => $scheduledDateStr,
+            'window_start' => $windowStart,
+            'window_end' => $windowEnd,
+            'label' => 'A coordinar',
+        ];
     }
 
     public function confirmWorkRequest(string $id, Request $request): JsonResponse
