@@ -55,10 +55,14 @@ class ProviderDashboardController extends Controller
                 })
                 ->orWhereHas('works', function ($q) use ($providerProfile) {
                     $q->where('provider_id', $providerProfile->id);
+                })
+                ->orWhere(function ($q) use ($categoryIds) {
+                    if (!empty($categoryIds)) {
+                        $q->whereIn('category_id', $categoryIds)
+                          ->whereDoesntHave('matchSession.cards')
+                          ->whereDoesntHave('works');
+                    }
                 });
-                if (!empty($categoryIds)) {
-                    $query->orWhereIn('category_id', $categoryIds);
-                }
             })
             ->with(['category', 'client', 'works' => function ($q) use ($providerProfile) {
                 $q->where('provider_id', $providerProfile->id)->with('conversation');
