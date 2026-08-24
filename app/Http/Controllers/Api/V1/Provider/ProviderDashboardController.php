@@ -230,6 +230,27 @@ class ProviderDashboardController extends Controller
             return response()->json(['message' => 'Perfil de proveedor no encontrado.'], 404);
         }
 
+        // Si ya existe un trabajo confirmado para este pedido y profesional, retornarlo de forma idempotente
+        $existingWork = \App\Infrastructure\Persistence\Eloquent\WorkModel::where('service_request_id', $serviceRequest->id)
+            ->where('provider_id', $providerProfile->id)
+            ->first();
+
+        if ($existingWork) {
+            $conversation = \App\Infrastructure\Persistence\Eloquent\ConversationModel::where('work_id', $existingWork->id)->first();
+            return response()->json([
+                'message' => 'Trabajo confirmado.',
+                'data' => [
+                    'id' => $serviceRequest->uuid,
+                    'work_id' => $existingWork->uuid,
+                    'conversation_id' => $conversation?->uuid,
+                    'status' => 'confirmed',
+                    'estimated_duration_min' => $existingWork->estimated_duration_min,
+                    'scheduled_at' => $existingWork->scheduled_at?->toISOString(),
+                ],
+            ]);
+        }
+
+        // Resolver o crear MatchCard automáticamente si la solicitud no poseía tarjeta previa
         $matchCard = \App\Infrastructure\Persistence\Eloquent\MatchCardModel::whereHas('matchSession', function ($q) use ($serviceRequest) {
             $q->where('service_request_id', $serviceRequest->id);
         })
@@ -237,13 +258,22 @@ class ProviderDashboardController extends Controller
         ->first();
 
         if (!$matchCard) {
-            \Illuminate\Support\Facades\Log::warning("MatchCard not found for provider confirmation", [
-                'service_request_id' => $serviceRequest->id,
-                'provider_id' => $providerProfile->id,
-            ]);
-            return response()->json([
-                'message' => 'No se encontró la tarjeta de emparejamiento para esta solicitud.',
-            ], 422);
+            $matchSession = \App\Infrastructure\Persistence\Eloquent\MatchSessionModel::firstOrCreate(
+                ['service_request_id' => $serviceRequest->id],
+                ['uuid' => (string) \Illuminate\Support\Str::uuid(), 'status' => 'active']
+            );
+
+            $matchCard = \App\Infrastructure\Persistence\Eloquent\MatchCardModel::firstOrCreate(
+                [
+                    'match_session_id' => $matchSession->id,
+                    'provider_id' => $providerProfile->id,
+                ],
+                [
+                    'rank_position' => 1,
+                    'score_total' => 1.0,
+                    'card_status' => 'accepted',
+                ]
+            );
         }
 
         $estimatedDuration = (int) $request->input('estimated_duration_min', 60);
@@ -290,7 +320,26 @@ class ProviderDashboardController extends Controller
                 ],
             ]);
         } catch (\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getCode() ?: 422);
+            $work = \App\Infrastructure\Persistence\Eloquent\WorkModel::where('service_request_id', $serviceRequest->id)
+                ->where('provider_id', $providerProfile->id)
+                ->first();
+
+            if ($work) {
+                $conversation = \App\Infrastructure\Persistence\Eloquent\ConversationModel::where('work_id', $work->id)->first();
+                return response()->json([
+                    'message' => 'Trabajo confirmado.',
+                    'data' => [
+                        'id' => $serviceRequest->uuid,
+                        'work_id' => $work->uuid,
+                        'conversation_id' => $conversation?->uuid,
+                        'status' => 'confirmed',
+                        'estimated_duration_min' => $work->estimated_duration_min,
+                        'scheduled_at' => $work->scheduled_at?->toISOString(),
+                    ],
+                ]);
+            }
+
+            return response()->json(['message' => $e->getMessage()], ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 422);
         }
     }
 
