@@ -21,7 +21,7 @@ class CreateWorkAction
             'provider_id' => $offer->provider_id,
             'status' => WorkStatus::Confirmed,
             'currency' => $offer->currency_code ?? 'ARS',
-            'scheduled_at' => $offer->proposed_start_at ?? now(),
+            'scheduled_at' => $offer->proposed_start_at,
             'estimated_duration_min' => $offer->estimated_duration_min ?? 60,
             'work_lat' => $serviceRequest->location_lat,
             'work_lng' => $serviceRequest->location_lng,

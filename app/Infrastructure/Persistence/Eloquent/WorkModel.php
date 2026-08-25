@@ -19,6 +19,7 @@ class WorkModel extends Model
         'provider_id',
         'status',
         'scheduled_at',
+        'scheduled_ends_at',
         'started_at',
         'completed_at',
         'estimated_duration_min',
@@ -35,6 +36,7 @@ class WorkModel extends Model
         return [
             'status' => WorkStatus::class,
             'scheduled_at' => 'datetime',
+            'scheduled_ends_at' => 'datetime',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'estimated_completion_at' => 'datetime',
@@ -42,6 +44,18 @@ class WorkModel extends Model
             'agreed_price' => 'decimal:2',
             'is_legacy_pre_quote' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (WorkModel $work) {
+            if ($work->scheduled_at !== null) {
+                $duration = $work->estimated_duration_min ?? 60;
+                $work->scheduled_ends_at = $work->scheduled_at->copy()->addMinutes((int) $duration);
+            } else {
+                $work->scheduled_ends_at = null;
+            }
+        });
     }
 
     public function serviceRequest() { return $this->belongsTo(ServiceRequestModel::class, 'service_request_id'); }
