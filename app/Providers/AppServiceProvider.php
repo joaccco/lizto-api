@@ -32,5 +32,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ServiceRequestModel::class, ServiceRequestPolicy::class);
         Gate::policy(WorkModel::class, WorkPolicy::class);
         Gate::policy(ConversationModel::class, ConversationPolicy::class);
+
+        \Illuminate\Support\Facades\Event::subscribe(
+            \App\Application\Notifications\Listeners\PushNotificationSubscriber::class
+        );
     }
 }
