@@ -49,6 +49,7 @@ class ProviderDashboardController extends Controller
         $categoryIds = $providerProfile->categories()->pluck('category_id')->filter()->toArray();
 
         $requests = ServiceRequestModel::query()
+            ->where('status', '!=', \App\Domain\ServiceRequests\Enums\RequestStatus::PendingSurvey)
             ->where(function ($query) use ($providerProfile, $categoryIds) {
                 $query->whereHas('matchSession.cards', function ($q) use ($providerProfile) {
                     $q->where('provider_id', $providerProfile->id);
@@ -101,7 +102,7 @@ class ProviderDashboardController extends Controller
         $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
 
         if (!$providerProfile) {
-            return response()->json(['data' => []]);
+            return response()->json(['data' => [], 'pending_schedule' => []]);
         }
 
         $works = \App\Infrastructure\Persistence\Eloquent\WorkModel::query()
@@ -110,8 +111,11 @@ class ProviderDashboardController extends Controller
             ->orderBy('scheduled_at')
             ->get();
 
-        $events = $works->map(function ($work) {
-            $scheduledAt = $work->scheduled_at ?? $work->created_at;
+        $scheduledWorks = $works->whereNotNull('scheduled_at');
+        $unscheduledWorks = $works->whereNull('scheduled_at');
+
+        $calendarEvents = $scheduledWorks->map(function ($work) {
+            $scheduledAt = $work->scheduled_at;
 
             return [
                 'id' => $work->uuid,
@@ -123,17 +127,41 @@ class ProviderDashboardController extends Controller
                 'address' => $work->work_address ?? 'Domicilio del cliente',
                 'status' => $work->status->value,
                 'scheduled_at' => $scheduledAt?->toISOString(),
-                'day' => (int) $scheduledAt?->format('j'),
-                'month' => (int) $scheduledAt?->format('n'),
-                'year' => (int) $scheduledAt?->format('Y'),
-                'time' => $scheduledAt?->format('H:i') ?? '09:00',
+                'day' => (int) $scheduledAt->format('j'),
+                'month' => (int) $scheduledAt->format('n'),
+                'year' => (int) $scheduledAt->format('Y'),
+                'time' => $scheduledAt->format('H:i'),
                 'estimated_duration_min' => $work->estimated_duration_min ?? 60,
                 'agreed_price' => $work->agreed_price,
                 'schedule' => static::formatScheduleBlock($work->serviceRequest),
             ];
-        });
+        })->values();
 
-        return response()->json(['data' => $events]);
+        $pendingScheduleEvents = $unscheduledWorks->map(function ($work) {
+            return [
+                'id' => $work->uuid,
+                'work_id' => $work->uuid,
+                'client_name' => $work->client ? $work->client->name : 'Cliente',
+                'client_email' => $work->client ? $work->client->email : '',
+                'job_type' => $work->serviceRequest?->raw_prompt ?? 'Servicio pendiente de coordinar',
+                'category' => $work->serviceRequest?->category?->name ?? 'Servicio general',
+                'address' => $work->work_address ?? 'Domicilio del cliente',
+                'status' => $work->status->value,
+                'scheduled_at' => null,
+                'day' => null,
+                'month' => null,
+                'year' => null,
+                'time' => 'A coordinar',
+                'estimated_duration_min' => $work->estimated_duration_min ?? 60,
+                'agreed_price' => $work->agreed_price,
+                'schedule' => static::formatScheduleBlock($work->serviceRequest),
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $calendarEvents,
+            'pending_schedule' => $pendingScheduleEvents,
+        ]);
     }
 
     public static function formatScheduleBlock(?ServiceRequestModel $sr): array

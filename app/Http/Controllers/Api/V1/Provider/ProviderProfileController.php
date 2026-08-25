@@ -151,7 +151,7 @@ class ProviderProfileController extends Controller
             'base_address' => 'nullable|string|max:500',
             'base_lat' => 'nullable|numeric',
             'base_lng' => 'nullable|numeric',
-            'radius_km' => 'nullable|integer|min:1|max:100',
+            'radius_km' => 'nullable|integer|min:' . ProviderProfileModel::MIN_COVERAGE_RADIUS_KM . '|max:' . ProviderProfileModel::MAX_COVERAGE_RADIUS_KM,
             'category_id' => 'nullable|integer|exists:categories,id',
             'specialties' => 'nullable|array',
             'schedules' => 'nullable|array',

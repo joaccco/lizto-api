@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProviderProfileModel extends Model
 {
+    public const MIN_COVERAGE_RADIUS_KM = 1;
+    public const MAX_COVERAGE_RADIUS_KM = 50;
+
     protected $table = 'provider_profiles';
 
     protected $fillable = [
