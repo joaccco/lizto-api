@@ -84,9 +84,10 @@ class MultipleProviderWorksTest extends TestCase
         $res1->assertStatus(200);
         $work1Uuid = $res1->json('data.work_id');
 
-        // 2. Confirm Request 2 (Provider accepts a SECOND work)
+        // 2. Confirm Request 2 (Provider accepts a SECOND work scheduled 2 hours later)
         $res2 = $this->actingAs($providerUser, 'sanctum')->postJson("/api/v1/provider/work-requests/{$request2->uuid}/confirm", [
             'estimated_duration_min' => 90,
+            'scheduled_at' => now()->addHours(2)->toISOString(),
         ]);
         $res2->assertStatus(200);
         $work2Uuid = $res2->json('data.work_id');

@@ -2,6 +2,7 @@
 
 namespace App\Application\Works\Actions;
 
+use App\Application\Works\Services\WorkScheduleValidator;
 use App\Domain\Works\Enums\WorkStatus;
 use App\Infrastructure\Persistence\Eloquent\OfferModel;
 use App\Infrastructure\Persistence\Eloquent\WorkModel;
@@ -9,9 +10,17 @@ use Illuminate\Support\Str;
 
 class CreateWorkAction
 {
+    public function __construct(protected WorkScheduleValidator $validator) {}
+
     public function execute(OfferModel $offer, ?int $matchCardId = null): WorkModel
     {
         $serviceRequest = $offer->serviceRequest;
+
+        $this->validator->validateNoOverlap(
+            $offer->provider_id,
+            $offer->proposed_start_at,
+            $offer->estimated_duration_min ?? 60
+        );
 
         return WorkModel::create([
             'uuid' => (string) Str::uuid(),

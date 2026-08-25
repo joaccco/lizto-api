@@ -197,7 +197,7 @@ class WorkTemporalModelTest extends TestCase
         $this->assertTrue(Schema::hasColumn('works', 'scheduled_at'));
 
         // Rollback migrations back to before scheduled_ends_at column
-        Artisan::call('migrate:rollback', ['--step' => 2]);
+        Artisan::call('migrate:rollback', ['--step' => 3]);
 
         $this->assertFalse(Schema::hasColumn('works', 'scheduled_ends_at'));
         $this->assertTrue(Schema::hasColumn('works', 'scheduled_at'));

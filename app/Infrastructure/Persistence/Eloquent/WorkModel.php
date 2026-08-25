@@ -51,7 +51,7 @@ class WorkModel extends Model
         static::saving(function (WorkModel $work) {
             if ($work->scheduled_at !== null) {
                 $duration = $work->estimated_duration_min ?? 60;
-                $work->scheduled_ends_at = $work->scheduled_at->copy()->addMinutes((int) $duration);
+                $work->scheduled_ends_at = \Carbon\Carbon::parse($work->scheduled_at)->addMinutes((int) $duration);
             } else {
                 $work->scheduled_ends_at = null;
             }
@@ -86,6 +86,15 @@ class WorkModel extends Model
         if (!$currentEnum->canTransitionTo($targetEnum)) {
             throw new \App\Domain\Shared\Exceptions\InvalidStateTransitionException(
                 "No se puede cambiar el estado de {$currentEnum->value} a {$targetEnum->value}."
+            );
+        }
+
+        if (in_array($targetEnum, [WorkStatus::Confirmed, WorkStatus::InProgress], true) && $this->scheduled_at !== null) {
+            app(\App\Application\Works\Services\WorkScheduleValidator::class)->validateNoOverlap(
+                $this->provider_id,
+                $this->scheduled_at,
+                $this->estimated_duration_min,
+                $this->id
             );
         }
 

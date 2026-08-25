@@ -219,6 +219,13 @@ class WorkController extends Controller
             'accepted_at' => now(),
         ]);
 
+        app(\App\Application\Works\Services\WorkScheduleValidator::class)->validateNoOverlap(
+            $work->provider_id,
+            $work->scheduled_at,
+            $work->estimated_duration_min,
+            $work->id
+        );
+
         $work->applyAcceptedQuote($quote);
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Confirmed);
 
