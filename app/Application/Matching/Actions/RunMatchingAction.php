@@ -54,7 +54,46 @@ final class RunMatchingAction
     {
         $urgencyVal = $request->urgency instanceof \BackedEnum ? $request->urgency->value : $request->urgency;
 
-        return ProviderProfileModel::query()
+        $requestDateStr = null;
+        if ($urgencyVal === 'today') {
+            $requestDateStr = \Carbon\Carbon::now('America/Argentina/Buenos_Aires')->format('Y-m-d');
+        } elseif ($request->scheduled_date) {
+            $requestDateStr = $request->scheduled_date instanceof \Carbon\Carbon
+                ? $request->scheduled_date->format('Y-m-d')
+                : (string) $request->scheduled_date;
+            if (strlen($requestDateStr) > 10) {
+                $requestDateStr = substr($requestDateStr, 0, 10);
+            }
+        } elseif ($request->preferred_datetime) {
+            $requestDateStr = $request->preferred_datetime->copy()->setTimezone('America/Argentina/Buenos_Aires')->format('Y-m-d');
+        }
+
+        $requestStartUtc = null;
+        $requestEndUtc = null;
+
+        if ($requestDateStr) {
+            if ($request->window_start && $request->window_end) {
+                $startStr = trim($request->window_start);
+                $endStr = trim($request->window_end);
+                if (strlen($startStr) === 5) $startStr .= ':00';
+                if (strlen($endStr) === 5) $endStr .= ':00';
+
+                $requestStartUtc = \Carbon\Carbon::parse("{$requestDateStr} {$startStr}", 'America/Argentina/Buenos_Aires')->utc();
+                $requestEndUtc = \Carbon\Carbon::parse("{$requestDateStr} {$endStr}", 'America/Argentina/Buenos_Aires')->utc();
+            } elseif ($request->preferred_datetime && $request->preferred_datetime->format('H:i:s') !== '00:00:00') {
+                $dtStr = $request->preferred_datetime->format('Y-m-d H:i:s');
+                $requestStartUtc = \Carbon\Carbon::parse($dtStr, 'America/Argentina/Buenos_Aires')->utc();
+                $requestEndUtc = $requestStartUtc->copy()->addMinutes(60);
+            } else {
+                $requestStartUtc = \Carbon\Carbon::parse("{$requestDateStr} 00:00:00", 'America/Argentina/Buenos_Aires')->utc();
+                $requestEndUtc = \Carbon\Carbon::parse("{$requestDateStr} 23:59:59", 'America/Argentina/Buenos_Aires')->utc();
+            }
+        }
+
+        $requestStartUtcStr = $requestStartUtc?->toIso8601String();
+        $requestEndUtcStr = $requestEndUtc?->toIso8601String();
+
+        $query = ProviderProfileModel::query()
             ->where('availability_status', '!=', 'unavailable')
             ->whereHas('categories', function ($q) use ($request) {
                 $q->where('category_id', $request->category_id)
@@ -105,27 +144,28 @@ final class RunMatchingAction
                       });
                 });
             })
-            ->whereDoesntHave('works', function ($q) use ($request) {
-                $q->whereIn('status', ['confirmed', 'in_progress']);
+            ->whereDoesntHave('works', function ($q) use ($requestStartUtcStr, $requestEndUtcStr) {
+                $q->whereIn('status', ['confirmed', 'in_progress'])
+                  ->whereNotNull('scheduled_at');
 
-                if ($request->scheduled_date) {
-                    $q->whereDate('scheduled_at', $request->scheduled_date);
-                }
-
-                if ($request->window_start && $request->window_end) {
-                    // Conflict check if existing work overlaps requested window
-                    $q->where(function ($wq) use ($request) {
-                        $wq->whereRaw("to_char(scheduled_at, 'HH24:MI') >= ? AND to_char(scheduled_at, 'HH24:MI') <= ?", [
-                            $request->window_start,
-                            $request->window_end,
-                        ]);
+                if ($requestStartUtcStr && $requestEndUtcStr) {
+                    $q->where(function ($wq) use ($requestStartUtcStr, $requestEndUtcStr) {
+                        $wq->where('scheduled_at', '<', $requestEndUtcStr)
+                           ->where(function ($sq) use ($requestStartUtcStr) {
+                               $sq->where('scheduled_ends_at', '>', $requestStartUtcStr)
+                                  ->orWhere(function ($rawQ) use ($requestStartUtcStr) {
+                                      $rawQ->whereNull('scheduled_ends_at')
+                                           ->whereRaw("scheduled_at + (COALESCE(estimated_duration_min, 60) || ' minutes')::interval > ?", [$requestStartUtcStr]);
+                                  });
+                           });
                     });
                 }
             })
             ->with(['categories' => function ($q) use ($request) {
                 $q->where('category_id', $request->category_id);
-            }, 'user', 'serviceAreas'])
-            ->get();
+            }, 'user', 'serviceAreas']);
+
+        return $query->get();
     }
 
     private function calculateBreakdown($provider, $request): array

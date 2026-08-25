@@ -154,9 +154,10 @@ class SchedulingClarificationTest extends TestCase
             'category_id' => $category->id,
             'raw_prompt' => 'Trabajo existente',
             'urgency' => RequestUrgency::Today,
-            'scheduled_date' => now()->toDateString(),
+            'scheduled_date' => \Carbon\Carbon::now('America/Argentina/Buenos_Aires')->toDateString(),
             'window_start' => '14:00',
             'window_end' => '16:00',
+            'is_remote' => true,
         ]);
 
         WorkModel::create([
@@ -165,7 +166,7 @@ class SchedulingClarificationTest extends TestCase
             'client_id' => $userA->id,
             'provider_id' => $providerB->id,
             'status' => WorkStatus::Confirmed,
-            'scheduled_at' => now()->setTime(15, 0),
+            'scheduled_at' => \Carbon\Carbon::now('America/Argentina/Buenos_Aires')->setTime(15, 0),
         ]);
 
         // 3. New request for Provider B's conflicting window
@@ -175,9 +176,10 @@ class SchedulingClarificationTest extends TestCase
             'category_id' => $category->id,
             'raw_prompt' => 'Nuevo pedido',
             'urgency' => RequestUrgency::Today,
-            'scheduled_date' => now()->toDateString(),
+            'scheduled_date' => \Carbon\Carbon::now('America/Argentina/Buenos_Aires')->toDateString(),
             'window_start' => '14:30',
             'window_end' => '15:30',
+            'is_remote' => true,
         ]);
 
         $action = new \App\Application\Matching\Actions\RunMatchingAction();
