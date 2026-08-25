@@ -35,4 +35,14 @@ class UserModel extends Authenticatable
     {
         return $this->hasMany(ServiceRequestModel::class, 'client_id');
     }
+
+    public function devices()
+    {
+        return $this->hasMany(UserDeviceModel::class, 'user_id');
+    }
+
+    public function activeDevices()
+    {
+        return $this->hasMany(UserDeviceModel::class, 'user_id')->whereNull('revoked_at');
+    }
 }

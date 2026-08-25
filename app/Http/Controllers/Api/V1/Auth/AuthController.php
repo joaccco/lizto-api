@@ -64,9 +64,17 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(): JsonResponse
+    public function logout(\Illuminate\Http\Request $request): JsonResponse
     {
-        auth()->user()->currentAccessToken()->delete();
+        $user = auth()->user();
+
+        if ($request->filled('device_token')) {
+            \App\Infrastructure\Persistence\Eloquent\UserDeviceModel::where('user_id', $user->id)
+                ->where('device_token', $request->input('device_token'))
+                ->update(['revoked_at' => now()]);
+        }
+
+        $user->currentAccessToken()->delete();
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente.',

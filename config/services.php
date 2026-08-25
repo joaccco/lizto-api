@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'fcm' => [
+        'project_id' => env('FCM_PROJECT_ID', 'lizto-app'),
+        'credentials_file' => env('FCM_CREDENTIALS_FILE'),
+        'credentials_json' => env('FCM_CREDENTIALS_JSON'),
+    ],
+
 ];

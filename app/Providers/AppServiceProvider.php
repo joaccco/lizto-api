@@ -18,7 +18,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(
+            \App\Infrastructure\Notifications\Contracts\FcmTransportInterface::class,
+            \App\Infrastructure\Notifications\FcmHttpTransport::class
+        );
     }
 
     /**

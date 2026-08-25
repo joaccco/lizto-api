@@ -46,6 +46,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
     // Rutas protegidas (auth:sanctum)
     Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
+        // Device Management (Push Notifications Infrastructure)
+        Route::post('/devices', [\App\Http\Controllers\Api\V1\Devices\UserDeviceController::class, 'store'])->name('devices.store');
+        Route::delete('/devices', [\App\Http\Controllers\Api\V1\Devices\UserDeviceController::class, 'destroy'])->name('devices.destroy');
+        Route::delete('/devices/{token}', [\App\Http\Controllers\Api\V1\Devices\UserDeviceController::class, 'destroy'])->name('devices.destroy.token');
+
         // Service Requests
         Route::get('/requests', [ServiceRequestController::class, 'index'])->name('requests.index');
         Route::get('/requests/{uuid}', [ServiceRequestController::class, 'show'])->name('requests.show');
