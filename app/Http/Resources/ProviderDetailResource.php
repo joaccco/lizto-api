@@ -56,6 +56,25 @@ class ProviderDetailResource extends JsonResource
             ];
         }) : [];
 
+        // Distance calculation if client coordinates are present in request
+        $distanceKm = null;
+        $clientLat = $request->input('lat') ?? $request->input('client_lat');
+        $clientLng = $request->input('lng') ?? $request->input('client_lng');
+        if ($clientLat !== null && $clientLng !== null && $this->base_lat !== null && $this->base_lng !== null) {
+            $distanceKm = $this->calculateDistance(
+                (float) $clientLat,
+                (float) $clientLng,
+                (float) $this->base_lat,
+                (float) $this->base_lng
+            );
+        }
+
+        $zone = \App\Domain\Location\Services\LocationPresenter::getApproximateZone(
+            $this->base_address,
+            $this->base_lat,
+            $this->base_lng
+        );
+
         // Fetch last 5 ratings/reviews for this provider
         $recentRatings = RatingModel::where('reviewed_id', $this->user_id)
             ->with('reviewer')
@@ -67,9 +86,11 @@ class ProviderDetailResource extends JsonResource
                     'id'              => $rating->id,
                     'score'           => (int) $rating->score,
                     'comment'         => $rating->comment,
-                    'reviewer_name'   => $rating->reviewer?->name ?? 'Cliente',
+                    'reviewer_name'   => $this->trimReviewerName($rating->reviewer?->name),
                     'reviewer_avatar' => $rating->reviewer?->avatar_url,
-                    'created_at'      => $rating->created_at?->toISOString(),
+                    'created_at'      => $rating->created_at instanceof \DateTimeInterface
+                        ? $rating->created_at->toISOString()
+                        : (string) ($rating->created_at ?? now()->toISOString()),
                 ];
             });
 
@@ -79,17 +100,17 @@ class ProviderDetailResource extends JsonResource
 
         return [
             'uuid'             => $user?->uuid,
-            'name'             => $user?->name,
-            'email'            => $user?->email,
-            'phone'            => $user?->phone,
+            'name'             => $this->commercial_name ?: ($user?->name ?? 'Profesional'),
+            'commercial_name'  => $this->commercial_name,
+            'user_name'        => $user?->name,
             'avatar_url'       => $user?->avatar_url,
             'bio'              => $this->bio,
             'years_experience' => (int) $this->years_experience,
             'is_verified'      => (bool) $this->is_verified,
             'location'         => [
-                'address' => $this->base_address,
-                'lat'     => $this->base_lat !== null ? (float) $this->base_lat : null,
-                'lng'     => $this->base_lng !== null ? (float) $this->base_lng : null,
+                'address'     => $zone['name'],
+                'zone'        => $zone['name'],
+                'distance_km' => $distanceKm,
             ],
             'availability'     => [
                 'status'            => $availabilityStatus,
@@ -108,7 +129,38 @@ class ProviderDetailResource extends JsonResource
             'categories'     => $categoriesData,
             'service_areas'  => $serviceAreasData,
             'schedules'      => $schedulesData,
+            'reviews'        => $recentRatings,
             'recent_reviews' => $recentRatings,
         ];
+    }
+
+    protected function trimReviewerName(?string $fullName): string
+    {
+        if (empty($fullName)) {
+            return 'Cliente';
+        }
+
+        $parts = array_values(array_filter(explode(' ', trim($fullName))));
+        if (count($parts) <= 1) {
+            return $parts[0] ?? 'Cliente';
+        }
+
+        $firstName = $parts[0];
+        $lastName = $parts[count($parts) - 1];
+        $initial = mb_strtoupper(mb_substr($lastName, 0, 1));
+
+        return "{$firstName} {$initial}.";
+    }
+
+    private function calculateDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371; // km
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+             sin($dLon / 2) * sin($dLon / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        return round($earthRadius * $c, 1);
     }
 }

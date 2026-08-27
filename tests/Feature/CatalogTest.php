@@ -75,7 +75,7 @@ class CatalogTest extends TestCase
             ->assertJsonPath('data.uuid', $uuid)
             ->assertJsonStructure([
                 'data' => [
-                    'uuid', 'name', 'email', 'bio', 'years_experience',
+                    'uuid', 'name', 'bio', 'years_experience',
                     'is_verified', 'location', 'availability',
                     'reputation_stats', 'categories', 'service_areas', 'schedules'
                 ]

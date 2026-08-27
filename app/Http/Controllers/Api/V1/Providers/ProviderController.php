@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Providers;
 
 use App\Domain\Providers\Enums\ProviderProfileStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProviderDetailResource;
 use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
 use App\Infrastructure\Persistence\Eloquent\UserModel;
 use Illuminate\Http\JsonResponse;
@@ -39,7 +40,7 @@ class ProviderController extends Controller
         ]);
     }
 
-    public function show(string $uuid): JsonResponse
+    public function show(string $uuid, Request $request): ProviderDetailResource
     {
         $user = UserModel::where('uuid', $uuid)->first();
         $provider = null;
@@ -60,9 +61,7 @@ class ProviderController extends Controller
             $provider = $query->with(['user', 'categories.category', 'serviceAreas', 'schedules', 'portfolioItems', 'reviews.reviewer'])->firstOrFail();
         }
 
-        return response()->json([
-            'data' => $this->formatPublicProfile($provider),
-        ]);
+        return new ProviderDetailResource($provider);
     }
 
     public function reviews(string $uuid, Request $request): JsonResponse
