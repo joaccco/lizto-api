@@ -15,8 +15,12 @@ class ProviderDocumentModel extends Model
         'provider_id',
         'document_type',
         'document_number',
+        'expiry_date',
         'file_path',
         'status',
+        'rejection_reason',
+        'verified_at',
+        'rejected_at',
         'notes',
     ];
 
@@ -25,7 +29,19 @@ class ProviderDocumentModel extends Model
         return [
             'document_type' => DocumentType::class,
             'status' => DocumentStatus::class,
+            'expiry_date' => 'date',
+            'verified_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (ProviderDocumentModel $model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
     }
 
     public function provider()

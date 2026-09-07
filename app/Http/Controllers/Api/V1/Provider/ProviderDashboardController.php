@@ -49,7 +49,14 @@ class ProviderDashboardController extends Controller
         $categoryIds = $providerProfile->categories()->pluck('category_id')->filter()->toArray();
 
         $requests = ServiceRequestModel::query()
-            ->where('status', '!=', \App\Domain\ServiceRequests\Enums\RequestStatus::PendingSurvey)
+            ->whereNotIn('status', [
+                \App\Domain\ServiceRequests\Enums\RequestStatus::PendingSurvey,
+                \App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled,
+                \App\Domain\ServiceRequests\Enums\RequestStatus::Completed,
+            ])
+            ->when(!empty($categoryIds), function ($q) use ($categoryIds) {
+                $q->whereIn('category_id', $categoryIds);
+            })
             ->where(function ($query) use ($providerProfile, $categoryIds) {
                 $query->whereHas('matchSession.cards', function ($q) use ($providerProfile) {
                     $q->where('provider_id', $providerProfile->id);

@@ -320,10 +320,18 @@ class WorkScheduleConflictTest extends TestCase
 
         $this->assertNotNull(WorkModel::find($work->id));
 
-        // Rollback 1 migration step
-        Artisan::call('migrate:rollback', ['--step' => 1]);
+        // Rollback exclusion constraint migration
+        Artisan::call('migrate:rollback', [
+            '--path' => 'database/migrations/2026_08_24_400000_add_exclusion_constraint_to_works_table.php',
+        ]);
+
+        $constraintExists = !empty(\Illuminate\Support\Facades\DB::select("SELECT 1 FROM pg_constraint WHERE conname = 'exclude_overlapping_works'"));
+        $this->assertFalse($constraintExists);
 
         // Work data remains intact after rollback
-        $this->assertNotNull(WorkModel::find($work->id));
+        $this->assertNotNull(WorkModel::withoutGlobalScopes()->find($work->id));
+
+        // Re-run migrations to restore schema for subsequent tests
+        Artisan::call('migrate');
     }
 }

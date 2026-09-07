@@ -9,14 +9,7 @@ use App\Http\Controllers\Api\V1\Matching\MatchSessionController;
 Route::prefix('v1')->name('api.v1.')->group(function () {
 
     // Health check público
-    Route::get('/health', function () {
-        return response()->json([
-            'status'    => 'ok',
-            'service'   => 'lizto-api',
-            'version'   => '1.0.0',
-            'timestamp' => now()->toISOString(),
-        ]);
-    })->name('health');
+    Route::get('/health', \App\Http\Controllers\Api\V1\HealthCheckController::class)->name('health');
 
     $throttleLogin = 'throttle:' . env('RATE_LIMIT_LOGIN', '5,1');
     $throttleCatalog = 'throttle:' . env('RATE_LIMIT_CATALOG', '60,1');
@@ -28,7 +21,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/login',    [AuthController::class, 'login'])->middleware($throttleLogin)->name('login');
 
         Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
-            Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+            Route::post('/logout', [AuthController::class, 'logout']);
+            Route::post('/become-provider', [AuthController::class, 'becomeProvider'])->name('logout');
             Route::get('/me',      [ProfileController::class, 'me'])->name('me');
         });
     });
@@ -78,16 +72,19 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Works
         Route::post('/works/{id}/complete', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'complete'])->name('works.complete');
+        Route::patch('/works/{id}', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'update'])->name('works.update');
         Route::post('/works/{id}/cancel', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'cancel'])->name('works.cancel');
         Route::post('/works/{workId}/rate', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rate'])->name('works.rate');
         Route::post('/works/{id}/final-quote', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'submitFinalQuote'])->name('works.final-quote.submit');
         Route::post('/works/{id}/final-quote/confirm', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'confirmFinalQuote'])->name('works.final-quote.confirm');
         Route::post('/works/{id}/final-quote/reject', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'rejectFinalQuote'])->name('works.final-quote.reject');
+        Route::get('/works/{id}/location', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'location'])->name('works.location');
         Route::get('/works/{id}/progress', [\App\Http\Controllers\Api\V1\Works\WorkController::class, 'progress'])->name('works.progress');
         Route::get('/works/{id}/quotes', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'index'])->name('works.quotes.index');
         Route::post('/works/{id}/quotes', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'store'])->name('works.quotes.store');
         Route::post('/works/{id}/quotes/{quote_uuid}/accept', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'accept'])->name('works.quotes.accept');
         Route::post('/works/{id}/quotes/{quote_uuid}/reject', [\App\Http\Controllers\Api\V1\Works\WorkQuoteController::class, 'reject'])->name('works.quotes.reject');
+        Route::get('/works/{id}/provider-location', [\App\Http\Controllers\Api\V1\Provider\ProviderLocationController::class, 'show'])->name('works.provider-location.show');
 
         // Offers (Bloque A)
         Route::post('/service-requests/{id}/offers', [\App\Http\Controllers\Api\V1\Offers\OfferController::class, 'store'])->name('offers.store');
@@ -111,10 +108,21 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/provider/profile/submit-verification', [\App\Http\Controllers\Api\V1\Provider\ProviderProfileController::class, 'submitVerification'])->name('provider.profile.submit-verification');
 
         Route::post('/provider/availability', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'availability'])->name('provider.availability');
+        Route::post('/providers/me/location', [\App\Http\Controllers\Api\V1\Provider\ProviderLocationController::class, 'update'])->name('provider.location.update');
         Route::get('/provider/work-requests', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'workRequests'])->name('provider.work-requests');
         Route::get('/provider/agenda', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'agenda'])->name('provider.agenda');
         Route::post('/provider/work-requests/{id}/confirm', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'confirmWorkRequest'])->name('provider.work-requests.confirm');
         Route::post('/provider/work-requests/{id}/decline', [\App\Http\Controllers\Api\V1\Provider\ProviderDashboardController::class, 'declineWorkRequest'])->name('provider.work-requests.decline');
+
+        // KYC Document Management (Task 2.1)
+        Route::post('/kyc/documents', [\App\Http\Controllers\Api\V1\Kyc\KycDocumentController::class, 'upload'])->name('kyc.documents.upload');
+        Route::get('/kyc/status', [\App\Http\Controllers\Api\V1\Kyc\KycDocumentController::class, 'status'])->name('kyc.status');
+        Route::get('/kyc/documents/{uuid}/signed-url', [\App\Http\Controllers\Api\V1\Kyc\KycDocumentController::class, 'signedUrl'])->name('kyc.documents.signed-url');
+        Route::delete('/kyc/documents/{uuid}', [\App\Http\Controllers\Api\V1\Kyc\KycDocumentController::class, 'destroy'])->name('kyc.documents.destroy');
+
+        // Admin KYC Verification
+        Route::post('/admin/kyc/documents/{uuid}/verify', [\App\Http\Controllers\Api\V1\Admin\AdminKycController::class, 'verify'])->name('admin.kyc.verify');
+        Route::post('/admin/kyc/documents/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminKycController::class, 'reject'])->name('admin.kyc.reject');
 
         // Admin Verification Panel
         Route::get('/admin/providers/pending', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'pending'])->name('admin.providers.pending');

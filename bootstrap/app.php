@@ -14,11 +14,22 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectGuestsTo(fn (Request $request) => null);
+        $middleware->api(append: [
+            \App\Http\Middleware\CorrelationIdMiddleware::class,
+            \App\Http\Middleware\StructuredLoggingMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+        $exceptions->report(function (\Throwable $e) {
+            try {
+                /** @var \App\Domain\Observability\Services\ErrorTrackerInterface $tracker */
+                $tracker = app(\App\Domain\Observability\Services\ErrorTrackerInterface::class);
+                $tracker->captureException($e);
+            } catch (\Throwable $ignored) {}
+        });
         $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([

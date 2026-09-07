@@ -30,12 +30,15 @@ class LocationPresenter
         if ($providerProfile) {
             $hasConfirmedWork = $request->works()
                 ->where('provider_id', $providerProfile->id)
-                ->whereIn('status', [
-                    WorkStatus::Confirmed->value,
-                    WorkStatus::InProgress->value,
-                    WorkStatus::PendingCompletion->value,
-                    WorkStatus::Completed->value,
-                ])
+                ->where(function ($q) {
+                    $q->whereNotNull('confirmed_at')
+                      ->orWhereIn('status', [
+                          WorkStatus::Confirmed->value,
+                          WorkStatus::InProgress->value,
+                          WorkStatus::PendingCompletion->value,
+                          WorkStatus::Completed->value,
+                      ]);
+                })
                 ->exists();
 
             if ($hasConfirmedWork) {
@@ -50,14 +53,20 @@ class LocationPresenter
     {
         $canViewExact = self::canViewExact($request, $user);
 
-        if ($canViewExact) {
+        if ($canViewExact && $request->location_lat !== null && $request->location_lng !== null) {
             return [
                 'location_address' => $request->location_address ?? 'Centro',
                 'address' => $request->location_address ?? 'Centro',
-                'location_lat' => $request->location_lat ? (float) $request->location_lat : -27.4692,
-                'location_lng' => $request->location_lng ? (float) $request->location_lng : -58.8306,
+                'location_lat' => (float) $request->location_lat,
+                'location_lng' => (float) $request->location_lng,
                 'is_approximate' => false,
             ];
+        }
+
+        if ($canViewExact) {
+            \Illuminate\Support\Facades\Log::warning('Confirmed work has missing coordinates, falling back to approximate zone', [
+                'request_id' => $request->id,
+            ]);
         }
 
         $zoneInfo = self::getApproximateZone($request->location_address, $request->location_lat, $request->location_lng);
@@ -82,8 +91,14 @@ class LocationPresenter
             }
         }
 
-        $roundedLat = $lat !== null ? round((float) $lat, 2) : -27.47;
-        $roundedLng = $lng !== null ? round((float) $lng, 2) : -58.83;
+        if ($lat === null || $lng === null) {
+            \Illuminate\Support\Facades\Log::warning('Location data is incomplete and cannot be approximated, using fallback');
+            $roundedLat = -27.47;
+            $roundedLng = -58.83;
+        } else {
+            $roundedLat = round((float) $lat, 2);
+            $roundedLng = round((float) $lng, 2);
+        }
 
         $zoneName = 'Zona Centro';
         if (!empty($rawAddress)) {
@@ -100,4 +115,44 @@ class LocationPresenter
             'lng' => $roundedLng,
         ];
     }
+
+    public static function getZoneFromCoordinates(?float $lat, ?float $lng): string
+    {
+        $zone = self::getApproximateZone(null, $lat, $lng);
+        return $zone['name'] ?? 'Zona Urbana';
+    }
+
+    public static function getZoneCenter(string $zoneName): array
+    {
+        $nameLower = mb_strtolower($zoneName);
+        foreach (self::ZONE_CENTROIDS as $key => $info) {
+            if (str_contains($nameLower, $key)) {
+                return ['latitude' => $info['lat'], 'longitude' => $info['lng']];
+            }
+        }
+        return ['latitude' => -34.6037, 'longitude' => -58.3816];
+    }
+
+    public static function calculateDistanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadiusKm = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($dLon / 2) * sin($dLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return round($earthRadiusKm * $c, 2);
+    }
+
+    public static function calculateETA(float $distanceKm, ?float $speedKmh = null): int
+    {
+        $effectiveSpeed = ($speedKmh && $speedKmh > 5 && $speedKmh <= 150) ? $speedKmh : 30.0;
+        $minutes = ($distanceKm / $effectiveSpeed) * 60;
+        return max(1, (int) round($minutes));
+    }
 }
+

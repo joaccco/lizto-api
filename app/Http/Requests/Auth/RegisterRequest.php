@@ -16,7 +16,7 @@ class RegisterRequest extends FormRequest
         return [
             'name'     => ['required', 'string', 'max:255'],
             'email'    => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:10', 'regex:/[A-Z]/', 'regex:/[0-9]/', 'confirmed'],
             'phone'    => ['nullable', 'string', 'max:50'],
         ];
     }
@@ -28,7 +28,8 @@ class RegisterRequest extends FormRequest
             'email.required'     => 'El email es obligatorio.',
             'email.unique'       => 'Este email ya está registrado.',
             'password.required'  => 'La contraseña es obligatoria.',
-            'password.min'       => 'La contraseña debe tener al menos 8 caracteres.',
+            'password.min'       => 'La contraseña debe tener al menos 10 caracteres.',
+            'password.regex'     => 'La contraseña debe contener letras mayúsculas y números.',
             'password.confirmed' => 'Las contraseñas no coinciden.',
         ];
     }

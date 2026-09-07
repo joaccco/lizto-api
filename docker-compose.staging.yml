@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  staging-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lizto_staging_api
+    restart: unless-stopped
+    env_file:
+      - .env.staging
+    ports:
+      - "9000:9000"
+    volumes:
+      - staging_storage:/var/www/html/storage
+    depends_on:
+      staging-postgres:
+        condition: service_healthy
+      staging-redis:
+        condition: service_healthy
+    networks:
+      - lizto_staging_net
+
+  staging-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lizto_staging_worker
+    restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "redis", "--tries=3", "--timeout=90"]
+    env_file:
+      - .env.staging
+    depends_on:
+      staging-postgres:
+        condition: service_healthy
+      staging-redis:
+        condition: service_healthy
+    networks:
+      - lizto_staging_net
+
+  staging-postgres:
+    image: postgres:16-alpine
+    container_name: lizto_staging_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lizto_staging
+      POSTGRES_USER: lizto_staging
+      POSTGRES_PASSWORD: SecureStagingPass2026!
+    ports:
+      - "5433:5432"
+    volumes:
+      - staging_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lizto_staging -d lizto_staging"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lizto_staging_net
+
+  staging-redis:
+    image: redis:7-alpine
+    container_name: lizto_staging_redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - staging_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lizto_staging_net
+
+networks:
+  lizto_staging_net:
+    driver: bridge
+
+volumes:
+  staging_pgdata:
+  staging_redisdata:
+  staging_storage:

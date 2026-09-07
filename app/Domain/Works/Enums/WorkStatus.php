@@ -19,7 +19,7 @@ enum WorkStatus: string
         return match ($this) {
             self::PendingConfirmation => [self::Confirmed, self::PendingDiagnosisQuote, self::Cancelled, self::NoShow],
             self::Confirmed => [self::InProgress, self::PendingDiagnosisQuote, self::Completed, self::Cancelled, self::NoShow],
-            self::PendingDiagnosisQuote => [self::Confirmed, self::InProgress, self::Cancelled],
+            self::PendingDiagnosisQuote => [self::Confirmed, self::InProgress, self::Completed, self::Cancelled],
             self::InProgress => [self::PendingCompletion, self::Completed, self::Disputed, self::Cancelled],
             self::PendingCompletion => [self::Completed, self::Disputed, self::Cancelled],
             self::Disputed => [self::Completed, self::Cancelled],

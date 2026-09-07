@@ -6,5 +6,6 @@ enum DocumentStatus: string
 {
     case Pending = 'pending';
     case Approved = 'approved';
+    case Verified = 'verified';
     case Rejected = 'rejected';
 }

@@ -31,8 +31,8 @@ class AuthTest extends TestCase
         $response = $this->postJson('/api/v1/auth/register', [
             'name'                  => 'Juan Perez',
             'email'                 => 'juan-auth@test.com',
-            'password'              => 'password123',
-            'password_confirmation' => 'password123',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
             'role'                  => 'client',
         ]);
 
@@ -49,8 +49,8 @@ class AuthTest extends TestCase
         $response = $this->postJson('/api/v1/auth/register', [
             'name'                  => 'Roberto Tecnico',
             'email'                 => 'roberto-auth@test.com',
-            'password'              => 'password123',
-            'password_confirmation' => 'password123',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
             'role'                  => 'provider',
         ]);
 
@@ -65,14 +65,14 @@ class AuthTest extends TestCase
         $this->postJson('/api/v1/auth/register', [
             'name'                  => 'Test User',
             'email'                 => 'test@test.com',
-            'password'              => 'password123',
-            'password_confirmation' => 'password123',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
             'role'                  => 'client',
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
             'email'    => 'test@test.com',
-            'password' => 'password123',
+            'password' => 'Password123',
         ]);
 
         $response->assertStatus(200)
@@ -103,8 +103,8 @@ class AuthTest extends TestCase
         $register = $this->postJson('/api/v1/auth/register', [
             'name'                  => 'Test User',
             'email'                 => 'me@test.com',
-            'password'              => 'password123',
-            'password_confirmation' => 'password123',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
             'role'                  => 'client',
         ]);
 
@@ -135,8 +135,8 @@ class AuthTest extends TestCase
         $register = $this->postJson('/api/v1/auth/register', [
             'name'                  => 'Logout User',
             'email'                 => 'logout@test.com',
-            'password'              => 'password123',
-            'password_confirmation' => 'password123',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
             'role'                  => 'client',
         ]);
 

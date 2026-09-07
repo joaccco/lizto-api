@@ -68,8 +68,8 @@ final class RunMatchingAction
             $requestDateStr = $request->preferred_datetime->copy()->setTimezone('America/Argentina/Buenos_Aires')->format('Y-m-d');
         }
 
-        $requestStartUtc = null;
-        $requestEndUtc = null;
+        $requestStartArg = null;
+        $requestEndArg = null;
 
         if ($requestDateStr) {
             if ($request->window_start && $request->window_end) {
@@ -78,20 +78,22 @@ final class RunMatchingAction
                 if (strlen($startStr) === 5) $startStr .= ':00';
                 if (strlen($endStr) === 5) $endStr .= ':00';
 
-                $requestStartUtc = \Carbon\Carbon::parse("{$requestDateStr} {$startStr}", 'America/Argentina/Buenos_Aires')->utc();
-                $requestEndUtc = \Carbon\Carbon::parse("{$requestDateStr} {$endStr}", 'America/Argentina/Buenos_Aires')->utc();
+                // FIX: Parse ALWAYS in Argentina timezone for consistency
+                $requestStartArg = \Carbon\Carbon::parse("{$requestDateStr} {$startStr}", 'America/Argentina/Buenos_Aires');
+                $requestEndArg = \Carbon\Carbon::parse("{$requestDateStr} {$endStr}", 'America/Argentina/Buenos_Aires');
             } elseif ($request->preferred_datetime && $request->preferred_datetime->format('H:i:s') !== '00:00:00') {
                 $dtStr = $request->preferred_datetime->format('Y-m-d H:i:s');
-                $requestStartUtc = \Carbon\Carbon::parse($dtStr, 'America/Argentina/Buenos_Aires')->utc();
-                $requestEndUtc = $requestStartUtc->copy()->addMinutes(60);
+                $requestStartArg = \Carbon\Carbon::parse($dtStr, 'America/Argentina/Buenos_Aires');
+                $requestEndArg = $requestStartArg->copy()->addMinutes(60);
             } else {
-                $requestStartUtc = \Carbon\Carbon::parse("{$requestDateStr} 00:00:00", 'America/Argentina/Buenos_Aires')->utc();
-                $requestEndUtc = \Carbon\Carbon::parse("{$requestDateStr} 23:59:59", 'America/Argentina/Buenos_Aires')->utc();
+                $requestStartArg = \Carbon\Carbon::parse("{$requestDateStr} 00:00:00", 'America/Argentina/Buenos_Aires');
+                $requestEndArg = \Carbon\Carbon::parse("{$requestDateStr} 23:59:59", 'America/Argentina/Buenos_Aires');
             }
         }
 
-        $requestStartUtcStr = $requestStartUtc?->toIso8601String();
-        $requestEndUtcStr = $requestEndUtc?->toIso8601String();
+        // FIX: Convert to UTC strings for database comparison
+        $requestStartUtcStr = $requestStartArg?->utc()->toIso8601String();
+        $requestEndUtcStr = $requestEndArg?->utc()->toIso8601String();
 
         $query = ProviderProfileModel::query()
             ->where('availability_status', '!=', 'unavailable')
@@ -149,16 +151,15 @@ final class RunMatchingAction
                   ->whereNotNull('scheduled_at');
 
                 if ($requestStartUtcStr && $requestEndUtcStr) {
-                    $q->where(function ($wq) use ($requestStartUtcStr, $requestEndUtcStr) {
-                        $wq->where('scheduled_at', '<', $requestEndUtcStr)
-                           ->where(function ($sq) use ($requestStartUtcStr) {
-                               $sq->where('scheduled_ends_at', '>', $requestStartUtcStr)
-                                  ->orWhere(function ($rawQ) use ($requestStartUtcStr) {
-                                      $rawQ->whereNull('scheduled_ends_at')
-                                           ->whereRaw("scheduled_at + (COALESCE(estimated_duration_min, 60) || ' minutes')::interval > ?", [$requestStartUtcStr]);
-                                  });
-                           });
-                    });
+                    // FIX: Correct interval overlap logic: work_start < window_end AND work_end > window_start
+                    // Using either scheduled_ends_at (if not null) or calculated from estimated_duration_min
+                    $q->whereRaw("
+                        scheduled_at < ?
+                        AND (
+                            COALESCE(scheduled_ends_at, scheduled_at + (COALESCE(estimated_duration_min, 60) || ' minutes')::interval)
+                            > ?
+                        )
+                    ", [$requestEndUtcStr, $requestStartUtcStr]);
                 }
             })
             ->with(['categories' => function ($q) use ($request) {

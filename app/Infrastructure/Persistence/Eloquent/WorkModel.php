@@ -9,8 +9,6 @@ class WorkModel extends Model
 {
     protected $table = 'works';
 
-    // Note: agreed_price and is_legacy_pre_quote are explicitly excluded from fillable
-    // to prevent accidental mass assignment. agreed_price is derived solely from an accepted WorkQuote.
     protected $fillable = [
         'uuid',
         'service_request_id',
@@ -22,6 +20,7 @@ class WorkModel extends Model
         'scheduled_ends_at',
         'started_at',
         'completed_at',
+        'confirmed_at',
         'estimated_duration_min',
         'estimated_completion_at',
         'work_lat',
@@ -29,6 +28,7 @@ class WorkModel extends Model
         'work_address',
         'final_price',
         'currency',
+        'fake_data_source',
     ];
 
     protected function casts(): array
@@ -39,6 +39,7 @@ class WorkModel extends Model
             'scheduled_ends_at' => 'datetime',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'confirmed_at' => 'datetime',
             'estimated_completion_at' => 'datetime',
             'final_price' => 'decimal:2',
             'agreed_price' => 'decimal:2',
@@ -48,6 +49,15 @@ class WorkModel extends Model
 
     protected static function booted(): void
     {
+        static::addGlobalScope('exclude_fake_data', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('works', 'fake_data_source')) {
+                $builder->where(function ($q) {
+                    $q->whereNull('works.fake_data_source')
+                      ->orWhere('works.fake_data_source', 'real');
+                });
+            }
+        });
+
         static::saving(function (WorkModel $work) {
             if ($work->scheduled_at !== null) {
                 $duration = $work->estimated_duration_min ?? 60;
@@ -56,6 +66,16 @@ class WorkModel extends Model
                 $work->scheduled_ends_at = null;
             }
         });
+    }
+
+    public function scopeWithFakeData(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->withoutGlobalScope('exclude_fake_data');
+    }
+
+    public function scopeOnlyFakeData(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->withoutGlobalScope('exclude_fake_data')->whereNotNull('works.fake_data_source')->where('works.fake_data_source', '!=', 'real');
     }
 
     public function serviceRequest() { return $this->belongsTo(ServiceRequestModel::class, 'service_request_id'); }
@@ -71,6 +91,7 @@ class WorkModel extends Model
     public function applyAcceptedQuote(WorkQuoteModel $quote): void
     {
         $this->agreed_price = $quote->amount;
+        $this->confirmed_at = now();
         $this->save();
     }
 

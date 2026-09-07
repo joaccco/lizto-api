@@ -117,6 +117,11 @@ class ProviderProfileModel extends Model
         return $this->hasMany(WorkModel::class, 'provider_id');
     }
 
+    public function locations()
+    {
+        return $this->hasMany(ProviderLocationModel::class, 'provider_id');
+    }
+
     public function scopeEligibleForMatching($query)
     {
         return $query->where(function ($q) {

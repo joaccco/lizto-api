@@ -31,8 +31,8 @@ class RegistrationRoleLifecycleTest extends TestCase
         $response = $this->postJson('/api/v1/auth/register', [
             'name' => 'Usuario Intento Provider',
             'email' => 'hacker_role_' . Str::random(5) . '@test.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'Password123',
+            'password_confirmation' => 'Password123',
             'role' => 'provider', // Payload tries to claim provider role
         ]);
 

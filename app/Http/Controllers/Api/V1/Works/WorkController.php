@@ -25,6 +25,16 @@ class WorkController extends Controller
 
         \Illuminate\Support\Facades\Gate::authorize('complete', $work);
 
+        $currentEnum = $work->status instanceof \App\Domain\Works\Enums\WorkStatus
+            ? $work->status
+            : \App\Domain\Works\Enums\WorkStatus::from($work->status);
+
+        if (!$currentEnum->canTransitionTo(\App\Domain\Works\Enums\WorkStatus::Completed)) {
+            throw new \App\Domain\Shared\Exceptions\InvalidStateTransitionException(
+                "No se puede cambiar el estado de {$currentEnum->value} a " . \App\Domain\Works\Enums\WorkStatus::Completed->value . "."
+            );
+        }
+
         \App\Domain\Works\Policies\WorkCompletionPolicy::validateCanComplete($work);
 
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Completed);
@@ -144,6 +154,57 @@ class WorkController extends Controller
                 'id' => $rating->id,
                 'score' => $rating->score,
                 'comment' => $rating->comment,
+            ],
+        ], 200);
+    }
+
+    public function location(string $id, Request $request): JsonResponse
+    {
+        $work = $this->findByUuid(WorkModel::class, $id);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+        }
+
+        $user = $request->user();
+        $providerProfile = $user?->providerProfile;
+        $isClient = $user && (int) $work->client_id === (int) $user->id;
+        $isProvider = $providerProfile && (int) $work->provider_id === (int) $providerProfile->id;
+
+        if (!$isClient && !$isProvider) {
+            return response()->json(['message' => 'No autorizado para ver la ubicación de este trabajo.'], 403);
+        }
+
+        $serviceRequest = $work->serviceRequest;
+        if (!$serviceRequest) {
+            return response()->json(['message' => 'Solicitud no encontrada.'], 404);
+        }
+
+        $locationData = \App\Domain\Location\Services\LocationPresenter::present($serviceRequest, $user);
+
+        return response()->json([
+            'data' => $locationData,
+        ], 200);
+    }
+
+    public function update(string $id, Request $request): JsonResponse
+    {
+        $work = $this->findByUuid(WorkModel::class, $id);
+        if (!$work) {
+            return response()->json(['message' => 'Trabajo no encontrado.'], 404);
+        }
+
+        $validated = $request->validate([
+            'scheduled_at' => 'nullable|date',
+            'estimated_duration_min' => 'nullable|integer|min:15|max:480',
+        ]);
+
+        $work->update($validated);
+
+        return response()->json([
+            'message' => 'Trabajo actualizado correctamente.',
+            'data' => [
+                'id' => $work->uuid,
+                'status' => $work->status instanceof \BackedEnum ? $work->status->value : $work->status,
             ],
         ], 200);
     }

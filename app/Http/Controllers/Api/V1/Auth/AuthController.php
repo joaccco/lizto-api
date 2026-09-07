@@ -8,6 +8,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Infrastructure\Persistence\Eloquent\UserModel;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -64,7 +65,7 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(\Illuminate\Http\Request $request): JsonResponse
+    public function logout(Request $request): JsonResponse
     {
         $user = auth()->user();
 
@@ -79,5 +80,81 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Sesión cerrada correctamente.',
         ]);
+    }
+
+    public function becomeProvider(Request $request): JsonResponse
+    {
+        $userId = auth()->id();
+
+        if (!$userId) {
+            return response()->json([
+                'message' => 'Usuario no autenticado.',
+            ], 401);
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($userId) {
+            /** @var UserModel|null $user */
+            $user = UserModel::where('id', $userId)->lockForUpdate()->first();
+            if (!$user) {
+                return response()->json(['message' => 'Usuario no encontrado.'], 404);
+            }
+
+            $providerProfile = \App\Infrastructure\Persistence\Eloquent\ProviderProfileModel::where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$providerProfile) {
+                \Illuminate\Support\Facades\Log::warning('Failed becomeProvider attempt - missing profile', [
+                    'user_id' => $user->id,
+                ]);
+
+                return response()->json([
+                    'message' => 'No se encontró perfil de proveedor. Completa tu perfil primero.',
+                ], 404);
+            }
+
+            $kyc = \App\Infrastructure\Persistence\Eloquent\ProviderDocumentModel::where('provider_id', $providerProfile->id)
+                ->whereIn('status', [
+                    \App\Domain\Providers\Enums\DocumentStatus::Verified->value,
+                    \App\Domain\Providers\Enums\DocumentStatus::Approved->value,
+                ])
+                ->first();
+
+            $hasRejected = \App\Infrastructure\Persistence\Eloquent\ProviderDocumentModel::where('provider_id', $providerProfile->id)
+                ->where('status', \App\Domain\Providers\Enums\DocumentStatus::Rejected->value)
+                ->exists();
+
+            if (!$kyc || $hasRejected) {
+                \Illuminate\Support\Facades\Log::warning('Failed becomeProvider attempt - unverified KYC', [
+                    'user_id' => $user->id,
+                    'has_verified_doc' => (bool) $kyc,
+                    'has_rejected_doc' => $hasRejected,
+                ]);
+
+                return response()->json([
+                    'message' => 'Debes completar la verificación de identidad (KYC) antes de convertirte en proveedor.',
+                    'errors'  => ['kyc' => ['Verificación pendiente o rechazada.']],
+                ], 403);
+            }
+
+            if ($user->hasRole('provider')) {
+                return response()->json([
+                    'message' => 'Ya eres proveedor.',
+                    'role'    => 'provider',
+                ], 200);
+            }
+
+            $user->assignRole('provider');
+
+            \Illuminate\Support\Facades\Log::info('User successfully transitioned to provider via KYC verification', [
+                'user_id' => $user->id,
+                'provider_profile_id' => $providerProfile->id,
+            ]);
+
+            return response()->json([
+                'message' => 'Ahora eres proveedor. ¡Bienvenido!',
+                'role'    => 'provider',
+            ], 200);
+        });
     }
 }
