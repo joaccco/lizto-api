@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Providers;
 use App\Domain\Providers\Enums\ProviderProfileStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProviderDetailResource;
+use App\Infrastructure\Persistence\Eloquent\CategoryModel;
 use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
 use App\Infrastructure\Persistence\Eloquent\UserModel;
 use Illuminate\Http\JsonResponse;
@@ -19,10 +20,17 @@ class ProviderController extends Controller
             ->with(['user', 'categories.category', 'serviceAreas', 'portfolioItems', 'reviews.reviewer', 'mvu']);
 
         if ($request->filled('category')) {
-            $categorySlug = $request->input('category');
-            $query->whereHas('categories.category', function ($q) use ($categorySlug) {
-                $q->where('slug', $categorySlug);
-            });
+            $rawCategory = $request->input('category');
+            $canonicalSlug = CategoryModel::resolveCanonicalSlug($rawCategory);
+
+            if ($canonicalSlug) {
+                $query->whereHas('categories.category', function ($q) use ($canonicalSlug) {
+                    $q->where('slug', $canonicalSlug);
+                });
+            } else {
+                // Fails closed for unknown/unresolvable category slugs
+                $query->whereRaw('1 = 0');
+            }
         }
 
         $query->orderByDesc('avg_rating');

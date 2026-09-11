@@ -164,7 +164,7 @@ class ServiceRequestController extends Controller
                     'total_reviews' => (int) ($provider->total_reviews ?? 0),
                     'total_jobs_completed' => (int) ($provider->total_jobs_completed ?? 0),
                     'years_experience' => (int) ($provider->years_experience ?? 5),
-                    'is_verified' => (bool) ($provider->is_verified ?? true),
+                    'is_verified' => (bool) ($provider->mvu?->overall_verification_status === 'approved'),
                     'specialties' => $provider->specialties ?? ['Servicios integrales'],
                     'price_from' => $provider->price_from ?? 8000,
                     'price_to' => $provider->price_to ?? 35000,
@@ -204,7 +204,7 @@ class ServiceRequestController extends Controller
             $category = CategoryModel::find($categoryId);
         }
         if (!$category && $categorySlug) {
-            $category = CategoryModel::where('slug', $categorySlug)->first();
+            $category = CategoryModel::resolve($categorySlug);
         }
 
         $location = $request->input('location', []);
