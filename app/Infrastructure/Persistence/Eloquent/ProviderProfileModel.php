@@ -4,10 +4,18 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domain\Providers\Enums\AvailabilityStatus;
 use App\Domain\Providers\Enums\ProviderProfileStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class ProviderProfileModel extends Model
 {
+    use HasFactory;
+
+    protected static function newFactory()
+    {
+        return \Database\Factories\ProviderProfileFactory::new();
+    }
+
     public const MIN_COVERAGE_RADIUS_KM = 1;
     public const MAX_COVERAGE_RADIUS_KM = 50;
 
@@ -46,6 +54,8 @@ class ProviderProfileModel extends Model
         'next_available_at',
         'current_job_lat',
         'current_job_lng',
+        'is_migrated',
+        'migrated_at',
     ];
 
     protected function casts(): array
@@ -54,6 +64,8 @@ class ProviderProfileModel extends Model
             'status' => ProviderProfileStatus::class,
             'verification_docs' => 'array',
             'is_verified' => 'boolean',
+            'is_migrated' => 'boolean',
+            'migrated_at' => 'datetime',
             'submitted_at' => 'datetime',
             'verified_at' => 'datetime',
             'rejected_at' => 'datetime',
@@ -122,11 +134,27 @@ class ProviderProfileModel extends Model
         return $this->hasMany(ProviderLocationModel::class, 'provider_id');
     }
 
+    public function mvu()
+    {
+        return $this->hasOne(\App\Models\ProfessionalMVU::class, 'provider_id');
+    }
+
+    public function identity()
+    {
+        return $this->hasOneThrough(
+            \App\Models\Identity::class,
+            UserModel::class,
+            'id', // Foreign key on users table...
+            'user_id', // Foreign key on identities table...
+            'user_id', // Local key on provider_profiles table...
+            'id' // Local key on users table...
+        );
+    }
+
     public function scopeEligibleForMatching($query)
     {
-        return $query->where(function ($q) {
-            $q->where('status', ProviderProfileStatus::Verified)
-              ->orWhere('is_verified', true);
+        return $query->whereHas('mvu', function ($q) {
+            $q->where('overall_verification_status', 'approved');
         })->where('availability_status', AvailabilityStatus::Available);
     }
 

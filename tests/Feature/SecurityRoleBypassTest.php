@@ -2,10 +2,19 @@
 
 namespace Tests\Feature;
 
-use App\Infrastructure\Persistence\Eloquent\UserModel;
-use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
+use App\Application\Matching\Actions\RunMatchingAction;
+use App\Domain\Providers\Enums\ProviderProfileStatus;
+use App\Infrastructure\Persistence\Eloquent\CategoryModel;
+use App\Infrastructure\Persistence\Eloquent\ProviderCategoryModel;
 use App\Infrastructure\Persistence\Eloquent\ProviderDocumentModel;
+use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
+use App\Infrastructure\Persistence\Eloquent\ProviderServiceAreaModel;
+use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
+use App\Infrastructure\Persistence\Eloquent\UserModel;
+use App\Models\Identity;
+use App\Models\ProfessionalMVU;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class SecurityRoleBypassTest extends TestCase
@@ -15,6 +24,7 @@ class SecurityRoleBypassTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         $this->seed(\Database\Seeders\RoleSeeder::class);
     }
 
@@ -259,5 +269,106 @@ class SecurityRoleBypassTest extends TestCase
 
         \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
             ->atLeast()->once();
+    }
+
+    public function test_adversarial_legacy_flags_without_approved_mvu_excluded_from_search_and_matching()
+    {
+        $category = CategoryModel::firstOrCreate(
+            ['slug' => 'cerrajeria'],
+            ['name' => 'Cerrajería', 'icon' => 'lock', 'is_active' => true, 'sort_order' => 1]
+        );
+
+        // Proveedor con flags heredados en TRUE pero SIN MVU aprobado
+        $user = UserModel::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Bypass Attempt Provider',
+            'email' => 'bypass@test.com',
+            'password' => bcrypt('SecurePass123'),
+            'status' => 'active',
+        ]);
+        $user->assignRole('provider');
+
+        $profile = ProviderProfileModel::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'status' => ProviderProfileStatus::Verified, // Flag heredado = verified
+            'is_verified' => true,                       // Flag heredado = true
+            'availability_status' => 'available',
+            'base_lat' => -27.4692,
+            'base_lng' => -58.8306,
+            'base_address' => 'Corrientes',
+            'years_experience' => 5,
+            'avg_rating' => 5.0,
+            'total_reviews' => 10,
+        ]);
+
+        ProviderCategoryModel::create([
+            'provider_id' => $profile->id,
+            'category_id' => $category->id,
+            'specialties' => ['apertura'],
+            'price_type' => 'fixed',
+            'is_active' => true,
+        ]);
+
+        ProviderServiceAreaModel::create([
+            'provider_id' => $profile->id,
+            'label' => 'Corrientes',
+            'center_lat' => -27.4692,
+            'center_lng' => -58.8306,
+            'radius_km' => 20,
+        ]);
+
+        // Caso 1: Sin registro en professional_mvus
+        $responseSearch = $this->getJson('/api/v1/providers');
+        $responseSearch->assertStatus(200);
+        $ids = collect($responseSearch->json('data'))->pluck('id')->all();
+        $this->assertNotContains($profile->uuid, $ids, 'Proveedor con flags heredados sin MVU no debe aparecer en búsqueda pública.');
+
+        // Caso 2: Con MVU pero en estado pending
+        $mvu = ProfessionalMVU::create([
+            'provider_id' => $profile->id,
+            'overall_verification_status' => 'pending',
+        ]);
+
+        $responseSearch2 = $this->getJson('/api/v1/providers');
+        $ids2 = collect($responseSearch2->json('data'))->pluck('id')->all();
+        $this->assertNotContains($profile->uuid, $ids2, 'Proveedor con MVU pending no debe aparecer en búsqueda pública.');
+
+        // Verificar en matching
+        $client = UserModel::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Test Client',
+            'email' => 'client_match@test.com',
+            'password' => bcrypt('SecurePass123'),
+            'status' => 'active',
+        ]);
+
+        $request = ServiceRequestModel::create([
+            'uuid' => (string) Str::uuid(),
+            'client_id' => $client->id,
+            'category_id' => $category->id,
+            'raw_prompt' => 'Urgente cerrajero',
+            'urgency' => 'immediate',
+            'status' => \App\Domain\ServiceRequests\Enums\RequestStatus::MatchingActive,
+            'location_lat' => -27.4692,
+            'location_lng' => -58.8306,
+            'location_address' => 'Corrientes',
+        ]);
+
+        $action = new RunMatchingAction();
+        $candidates = $action->execute($request);
+        $candidateProviderIds = collect($candidates)->pluck('provider.id')->all();
+        $this->assertNotContains($profile->id, $candidateProviderIds, 'Proveedor con MVU pending no debe ser candidato de matching.');
+
+        // Caso 3: MVU pasa a approved -> AHORA SÍ debe aparecer
+        $mvu->update(['overall_verification_status' => 'approved']);
+
+        $responseSearch3 = $this->getJson('/api/v1/providers');
+        $ids3 = collect($responseSearch3->json('data'))->pluck('id')->all();
+        $this->assertContains($profile->uuid, $ids3, 'Proveedor con MVU approved debe aparecer en búsqueda.');
+
+        $candidatesAfter = $action->execute($request);
+        $candidateProviderIdsAfter = collect($candidatesAfter)->pluck('provider.id')->all();
+        $this->assertContains($profile->id, $candidateProviderIdsAfter, 'Proveedor con MVU approved debe aparecer en matching.');
     }
 }

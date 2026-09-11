@@ -19,7 +19,7 @@ enum RequestStatus: string
         return match ($this) {
             self::PendingSurvey => [self::PendingMatching, self::MatchingActive, self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
             self::PendingMatching => [self::MatchingActive, self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
-            self::MatchingActive => [self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
+            self::MatchingActive => [self::PendingMatching, self::ProviderSelected, self::Active, self::Cancelled, self::Expired],
             self::ProviderSelected => [self::PendingProvider, self::MatchingActive, self::Active, self::Completed, self::Cancelled, self::Expired],
             self::PendingProvider => [self::Active, self::Completed, self::MatchingActive, self::Cancelled, self::Expired],
             self::Active => [self::Completed, self::Cancelled],

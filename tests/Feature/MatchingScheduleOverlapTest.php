@@ -41,12 +41,8 @@ class MatchingScheduleOverlapTest extends TestCase
             'slug' => 'gas_' . Str::random(4),
         ]);
 
-        $providerProfile = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
+        $providerProfile = ProviderProfileModel::factory()->enabled()->create([
             'user_id' => $proUser->id,
-            'status' => ProviderProfileStatus::Verified,
-            'is_verified' => true,
-            'availability_status' => 'available',
             'base_lat' => -34.6037,
             'base_lng' => -58.3816,
         ]);

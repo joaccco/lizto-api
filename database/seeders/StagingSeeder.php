@@ -118,6 +118,32 @@ class StagingSeeder extends Seeder
                 ]
             );
 
+            $identity = \App\Models\Identity::updateOrCreate(
+                ['user_id' => $pUser->id],
+                [
+                    'dni' => '30' . str_pad((string) $j, 6, '0', STR_PAD_LEFT),
+                    'firstname' => "Profesional",
+                    'lastname' => "Staging {$j}",
+                    'status' => 'approved',
+                    'verified_at' => now(),
+                    'verified_by' => 'staging_seeder',
+                ]
+            );
+
+            \App\Models\ProfessionalMVU::updateOrCreate(
+                ['provider_id' => $profile->id],
+                [
+                    'identity_id' => $identity->id,
+                    'identity_verified_at' => now(),
+                    'antecedentes_status' => 'approved',
+                    'antecedentes_cert_uploaded_at' => now(),
+                    'matrícula_number' => 'MAT-STG-' . $j,
+                    'matrícula_verified_at' => now(),
+                    'skills_verified' => true,
+                    'overall_verification_status' => 'approved',
+                ]
+            );
+
             // Ubicación reciente para geo-tracking
             ProviderLocationModel::create([
                 'provider_id' => $profile->id,

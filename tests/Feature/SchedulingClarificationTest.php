@@ -128,22 +128,16 @@ class SchedulingClarificationTest extends TestCase
 
         // 1. Create Available Provider A (No conflicts)
         $userA = $this->createUser('provider');
-        $providerA = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
+        $providerA = ProviderProfileModel::factory()->enabled()->create([
             'user_id' => $userA->id,
-            'status' => ProviderProfileStatus::Verified,
-            'is_verified' => true,
             'availability_status' => 'available',
         ]);
         $providerA->categories()->create(['category_id' => $category->id, 'is_active' => true]);
 
         // 2. Create Provider B with conflicting work today at 15:00
         $userB = $this->createUser('provider');
-        $providerB = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
+        $providerB = ProviderProfileModel::factory()->enabled()->create([
             'user_id' => $userB->id,
-            'status' => ProviderProfileStatus::Verified,
-            'is_verified' => true,
             'availability_status' => 'available',
         ]);
         $providerB->categories()->create(['category_id' => $category->id, 'is_active' => true]);

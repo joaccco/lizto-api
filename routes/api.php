@@ -131,6 +131,24 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/admin/providers/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reject'])->name('admin.providers.reject');
         Route::post('/admin/providers/{uuid}/suspend', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'suspend'])->name('admin.providers.suspend');
         Route::post('/admin/providers/{uuid}/reactivate', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reactivate'])->name('admin.providers.reactivate');
+
+        // Onboarding Identity (Didit KYC)
+        Route::prefix('onboarding/identity')->name('onboarding.identity.')->group(function () {
+            Route::post('/start', [\App\Http\Controllers\Api\V1\Onboarding\IdentityController::class, 'start'])->name('start');
+            Route::get('/status', [\App\Http\Controllers\Api\V1\Onboarding\IdentityController::class, 'status'])->name('status');
+        });
+
+        // Admin MVU (Professional Verification Panel)
+        Route::prefix('admin/mvu')->name('admin.mvu.')->group(function () {
+            Route::get('/pending', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'pending'])->name('pending');
+            Route::get('/{id}', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'show'])->name('show');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'reject'])->name('reject');
+            Route::post('/{id}/request-data', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'requestData'])->name('request-data');
+        });
     });
+
+    // Webhooks públicos (con firma HMAC verificada por controller)
+    Route::post('/webhooks/didit/identity-verified', [\App\Http\Controllers\Api\V1\Webhooks\IdentityWebhookController::class, 'handleVerified'])->name('webhooks.didit.verified');
 
 });

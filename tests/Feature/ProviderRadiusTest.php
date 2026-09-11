@@ -91,7 +91,7 @@ class ProviderRadiusTest extends TestCase
 
         // Provider ~20 km away at (-27.6500, -58.8306)
         $providerUser = $this->createTestUser('provider');
-        $providerProfile = ProviderProfileModel::create([
+        $providerProfile = ProviderProfileModel::factory()->enabled()->create([
             'user_id' => $providerUser->id,
             'base_lat' => -27.6500,
             'base_lng' => -58.8306,

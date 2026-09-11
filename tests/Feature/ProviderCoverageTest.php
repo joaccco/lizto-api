@@ -31,16 +31,22 @@ class ProviderCoverageTest extends TestCase
         $providerUser2 = UserModel::create(['name' => 'Pro Cov 2', 'email' => 'pro_cov2_' . Str::random(5) . '@test.com', 'password' => bcrypt('password')]);
         $category = CategoryModel::first();
 
-        $provider1 = ProviderProfileModel::create([
-            'user_id' => $providerUser1->id, 'category_id' => $category->id, 'uuid' => (string) Str::uuid(), 'bio' => 'Pro1', 'is_verified' => true,
-            'base_lat' => -27.4692, 'base_lng' => -58.8306, 'availability_status' => 'available',
+        $provider1 = ProviderProfileModel::factory()->enabled()->create([
+            'user_id' => $providerUser1->id,
+            'bio' => 'Pro1',
+            'base_lat' => -27.4692,
+            'base_lng' => -58.8306,
+            'availability_status' => 'available',
         ]);
         $provider1->categories()->create(['category_id' => $category->id]);
         $provider1->serviceAreas()->create(['center_lat' => -27.4692, 'center_lng' => -58.8306, 'radius_km' => 15, 'label' => 'Base']);
 
-        $provider2 = ProviderProfileModel::create([
-            'user_id' => $providerUser2->id, 'category_id' => $category->id, 'uuid' => (string) Str::uuid(), 'bio' => 'Pro2', 'is_verified' => true,
-            'base_lat' => -27.4692, 'base_lng' => -58.8306, 'availability_status' => 'available',
+        $provider2 = ProviderProfileModel::factory()->enabled()->create([
+            'user_id' => $providerUser2->id,
+            'bio' => 'Pro2',
+            'base_lat' => -27.4692,
+            'base_lng' => -58.8306,
+            'availability_status' => 'available',
         ]);
         $provider2->categories()->create(['category_id' => $category->id]);
 

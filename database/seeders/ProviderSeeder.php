@@ -95,6 +95,17 @@ class ProviderSeeder extends Seeder
                 ]
             );
 
+            if ($data['email'] !== 'roberto@lizto.test') {
+                ProviderServiceAreaModel::updateOrCreate(
+                    ['provider_id' => $profile->id, 'label' => 'CABA'],
+                    [
+                        'center_lat' => -34.5889,
+                        'center_lng' => -58.4306,
+                        'radius_km'  => 50,
+                    ]
+                );
+            }
+
             foreach ($data['days'] as $day) {
                 ProviderScheduleModel::updateOrCreate(
                     ['provider_id' => $profile->id, 'day_of_week' => $day],
@@ -102,6 +113,42 @@ class ProviderSeeder extends Seeder
                         'start_time' => $data['start'],
                         'end_time'   => $data['end'],
                         'is_active'  => true,
+                    ]
+                );
+            }
+
+            if ($data['is_verified']) {
+                $nameParts = explode(' ', $data['name']);
+                $identity = \App\Models\Identity::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'dni' => '20' . str_pad((string) $user->id, 6, '0', STR_PAD_LEFT),
+                        'firstname' => $nameParts[0] ?? 'Nombre',
+                        'lastname' => $nameParts[1] ?? 'Apellido',
+                        'status' => 'approved',
+                        'verified_at' => now(),
+                        'verified_by' => 'seeder',
+                    ]
+                );
+
+                \App\Models\ProfessionalMVU::updateOrCreate(
+                    ['provider_id' => $profile->id],
+                    [
+                        'identity_id' => $identity->id,
+                        'identity_verified_at' => now(),
+                        'antecedentes_status' => 'approved',
+                        'antecedentes_cert_uploaded_at' => now(),
+                        'matrícula_number' => 'MAT-' . $profile->id,
+                        'matrícula_verified_at' => now(),
+                        'skills_verified' => true,
+                        'overall_verification_status' => 'approved',
+                    ]
+                );
+            } else {
+                \App\Models\ProfessionalMVU::updateOrCreate(
+                    ['provider_id' => $profile->id],
+                    [
+                        'overall_verification_status' => 'pending',
                     ]
                 );
             }

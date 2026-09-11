@@ -45,4 +45,19 @@ class UserModel extends Authenticatable
     {
         return $this->hasMany(UserDeviceModel::class, 'user_id')->whereNull('revoked_at');
     }
+
+    public function identity()
+    {
+        return $this->hasOne(\App\Models\Identity::class, 'user_id');
+    }
+
+    public function bans()
+    {
+        return $this->hasMany(\App\Models\Ban::class, 'user_id');
+    }
+
+    public function restrictions()
+    {
+        return $this->hasMany(\App\Models\Restriction::class, 'user_id');
+    }
 }

@@ -56,20 +56,22 @@ class ClientWorkflowTest extends TestCase
         ]);
         $this->providerUser->assignRole('provider');
 
-        $this->providerProfile = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
+        $this->providerProfile = ProviderProfileModel::factory()->enabled()->create([
             'user_id' => $this->providerUser->id,
-            'category_id' => $this->category->id,
             'bio' => 'Especialista en cañerías y gas',
-            'is_verified' => true,
-            'status' => ProviderProfileStatus::Verified,
             'avg_rating' => 4.9,
             'total_reviews' => 24,
             'availability_status' => 'available',
-            'coverage_radius_km' => 20,
             'base_lat' => -34.6037,
             'base_lng' => -58.3816,
             'base_address' => 'Calle Principal 123, Buenos Aires',
+        ]);
+
+        $this->providerProfile->serviceAreas()->create([
+            'center_lat' => -34.6037,
+            'center_lng' => -58.3816,
+            'radius_km' => 20,
+            'label' => 'Buenos Aires',
         ]);
 
         ProviderCategoryModel::create([

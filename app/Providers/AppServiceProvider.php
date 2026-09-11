@@ -22,6 +22,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Notifications\Contracts\FcmTransportInterface::class,
             \App\Infrastructure\Notifications\FcmHttpTransport::class
         );
+
+        $this->app->bind(
+            \App\Infrastructure\KYC\IdentityProviderContract::class,
+            \App\Infrastructure\KYC\DiditIdentityProvider::class
+        );
     }
 
     /**
