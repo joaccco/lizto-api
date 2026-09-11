@@ -1,0 +1,9 @@
+{
+  "_disclaimer": "NOTA: Payload sintético generado para pruebas locales de canonicalización. La firma NO está validada contra Didit Sandbox ni Producción. La captura de un webhook real sigue pendiente de un túnel público.",
+  "workflow_id": "1a3cf8eb-1e92-4554-bb91-2017577cf811",
+  "status": "approved",
+  "session_id": "8b51c148-5fa0-482a-89a7-96a84c987fa2",
+  "vendor_data": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "event": "session.verified",
+  "timestamp": 1725782400
+}
