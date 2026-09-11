@@ -16,7 +16,7 @@ class ProviderController extends Controller
     {
         $query = ProviderProfileModel::query()
             ->eligibleForMatching()
-            ->with(['user', 'categories.category', 'serviceAreas', 'portfolioItems', 'reviews.reviewer']);
+            ->with(['user', 'categories.category', 'serviceAreas', 'portfolioItems', 'reviews.reviewer', 'mvu']);
 
         if ($request->filled('category')) {
             $categorySlug = $request->input('category');
@@ -28,7 +28,7 @@ class ProviderController extends Controller
         $query->orderByDesc('avg_rating');
         $providers = $query->paginate(15);
 
-        $items = collect($providers->items())->map(fn($p) => $this->formatPublicProfile($p));
+        $items = collect($providers->items())->map(fn($p) => $this->formatPublicProfile($p, $request));
 
         return response()->json([
             'data' => $items,
@@ -110,7 +110,7 @@ class ProviderController extends Controller
         ]);
     }
 
-    private function formatPublicProfile(ProviderProfileModel $provider): array
+    private function formatPublicProfile(ProviderProfileModel $provider, ?Request $request = null): array
     {
         $category = $provider->categories->first();
         $specialties = $category ? ($category->specialties ?? []) : [];
@@ -146,22 +146,45 @@ class ProviderController extends Controller
             ];
         })->values()->toArray();
 
+        $distanceKm = null;
+        if ($request) {
+            $clientLat = $request->input('lat') ?? $request->input('client_lat');
+            $clientLng = $request->input('lng') ?? $request->input('client_lng');
+            if ($clientLat !== null && $clientLng !== null && $provider->base_lat !== null && $provider->base_lng !== null) {
+                $distanceKm = \App\Domain\Location\Services\LocationPresenter::calculateDistanceKm(
+                    (float) $clientLat,
+                    (float) $clientLng,
+                    (float) $provider->base_lat,
+                    (float) $provider->base_lng
+                );
+            }
+        }
+
+        $zoneName = null;
+        if ($provider->base_address || ($provider->base_lat !== null && $provider->base_lng !== null)) {
+            $zone = \App\Domain\Location\Services\LocationPresenter::getApproximateZone(
+                $provider->base_address,
+                $provider->base_lat,
+                $provider->base_lng
+            );
+            $zoneName = $zone['name'] ?? null;
+        }
+
         return [
             'id' => $provider->uuid ?? $provider->user?->uuid ?? (string) $provider->id,
             'uuid' => $provider->user?->uuid ?? $provider->uuid ?? (string) $provider->id,
             'name' => $provider->commercial_name ?: ($provider->user?->name ?? 'Profesional'),
             'commercial_name' => $provider->commercial_name,
             'user_name' => $provider->user?->name,
-            'email' => $provider->user?->email,
             'avatar_url' => $provider->user?->avatar_url,
-            'bio' => $provider->bio ?? 'Profesional verificado en Lizto.',
-            'category_name' => $category?->category?->name ?? 'Servicio general',
+            'bio' => $provider->bio,
+            'category_name' => $category?->category?->name,
             'specialties' => $specialties,
-            'years_experience' => (int) ($provider->years_experience ?? 3),
+            'years_experience' => $provider->years_experience !== null ? (int) $provider->years_experience : null,
             'avg_rating' => (float) ($provider->avg_rating ?? 5.0),
             'total_reviews' => (int) ($provider->total_reviews ?? 0),
             'total_jobs_completed' => (int) ($provider->total_jobs_completed ?? 0),
-            'is_verified' => (bool) ($provider->is_verified ?? true),
+            'is_verified' => (bool) ($provider->mvu?->overall_verification_status === 'approved'),
             'status' => $provider->status instanceof \BackedEnum ? $provider->status->value : $provider->status,
             'availability_status' => $availStatus,
             'availability' => [
@@ -169,13 +192,13 @@ class ProviderController extends Controller
                 'busy_until' => $provider->busy_until?->toISOString(),
             ],
             'location' => [
-                'address' => $provider->base_address ?? 'Centro',
-                'lat' => $provider->base_lat ? (float) $provider->base_lat : -27.4692,
-                'lng' => $provider->base_lng ? (float) $provider->base_lng : -58.8306,
+                'address' => $zoneName,
+                'zone' => $zoneName,
+                'distance_km' => $distanceKm,
             ],
-            'distance_km' => 1.5,
-            'base_address' => $provider->base_address ?? 'Centro',
-            'radius_km' => $area ? (int) $area->radius_km : 15,
+            'distance_km' => $distanceKm,
+            'base_address' => $zoneName,
+            'radius_km' => $area ? (int) $area->radius_km : null,
             'badges' => $badges,
             'reputation_stats' => [
                 'avg_rating' => (float) ($provider->avg_rating ?? 5.0),
