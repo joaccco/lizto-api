@@ -135,7 +135,7 @@ class WorkController extends Controller
             if ($providerProfile) {
                 $allRatings = RatingModel::where('reviewed_id', $providerUserId)->get();
                 $count = $allRatings->count();
-                $avg = $count > 0 ? round($allRatings->avg('score'), 2) : 5.0;
+                $avg = $count > 0 ? round($allRatings->avg('score'), 2) : 0;
 
                 $providerProfile->update([
                     'avg_rating' => $avg,
@@ -358,7 +358,7 @@ class WorkController extends Controller
                 'provider' => [
                     'name' => $providerUser?->name ?? 'Proveedor',
                     'avatar_url' => $providerUser?->avatar_url,
-                    'avg_rating' => (float) ($provider?->avg_rating ?? 5.0),
+                    'avg_rating' => ($provider?->total_reviews ?? 0) > 0 ? (float) $provider->avg_rating : null,
                 ],
                 'conversation_id' => $work->conversation?->uuid,
                 'next_step_description' => $nextStepDescription,

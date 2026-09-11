@@ -125,7 +125,7 @@ class ProviderController extends Controller
         $area = $provider->serviceAreas->first();
 
         $badges = ["Profesional Verificado"];
-        if (($provider->avg_rating ?? 5.0) >= 4.8) {
+        if ($provider->total_reviews > 0 && (float) $provider->avg_rating >= 4.8) {
             $badges[] = "Top Profesional";
         }
         if (($provider->avg_response_minutes ?? 60) <= 15) {
@@ -189,10 +189,10 @@ class ProviderController extends Controller
             'category_name' => $category?->category?->name,
             'specialties' => $specialties,
             'years_experience' => $provider->years_experience !== null ? (int) $provider->years_experience : null,
-            'avg_rating' => (float) ($provider->avg_rating ?? 5.0),
+            'avg_rating' => $provider->total_reviews > 0 ? (float) $provider->avg_rating : null,
             'total_reviews' => (int) ($provider->total_reviews ?? 0),
             'total_jobs_completed' => (int) ($provider->total_jobs_completed ?? 0),
-            'is_verified' => (bool) ($provider->mvu?->overall_verification_status === 'approved'),
+            'is_verified' => $provider->isIdentityVerified(),
             'status' => $provider->status instanceof \BackedEnum ? $provider->status->value : $provider->status,
             'availability_status' => $availStatus,
             'availability' => [
@@ -209,9 +209,9 @@ class ProviderController extends Controller
             'radius_km' => $area ? (int) $area->radius_km : null,
             'badges' => $badges,
             'reputation_stats' => [
-                'avg_rating' => (float) ($provider->avg_rating ?? 5.0),
+                'avg_rating' => $provider->total_reviews > 0 ? (float) $provider->avg_rating : null,
                 'total_reviews' => (int) ($provider->total_reviews ?? 0),
-                'completion_rate' => (float) ($provider->completion_rate ?? 100),
+                'completion_rate' => $provider->total_jobs_completed > 0 ? (float) ($provider->completion_rate ?? 0) : null,
             ],
             'categories' => $provider->categories->map(fn($c) => [
                 'id' => $c->category_id,

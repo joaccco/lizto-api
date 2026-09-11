@@ -100,7 +100,7 @@ class ProviderProfileController extends Controller
                 'bio' => $providerProfile->bio ?? '',
                 'years_experience' => (int) ($providerProfile->years_experience ?? 3),
                 'is_verified' => (bool) ($providerProfile->is_verified ?? false),
-                'avg_rating' => (float) ($providerProfile->avg_rating ?? 5.0),
+                'avg_rating' => ($providerProfile->total_reviews ?? 0) > 0 ? (float) $providerProfile->avg_rating : null,
                 'total_reviews' => (int) ($providerProfile->total_reviews ?? 0),
                 'total_jobs_completed' => (int) ($providerProfile->total_jobs_completed ?? 0),
                 'radius_km' => $radiusKm,

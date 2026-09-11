@@ -62,7 +62,7 @@ class ProviderResource extends JsonResource
             'bio'                  => $this->bio,
             'years_experience'     => (int) $this->years_experience,
             'is_verified'          => (bool) $this->is_verified,
-            'avg_rating'           => (float) $this->avg_rating,
+            'avg_rating'           => ((int) $this->total_reviews) > 0 ? (float) $this->avg_rating : null,
             'total_reviews'        => (int) $this->total_reviews,
             'total_jobs_completed' => (int) $this->total_jobs_completed,
             'price_from'           => $minPriceFrom,

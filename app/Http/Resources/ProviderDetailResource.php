@@ -118,7 +118,7 @@ class ProviderDetailResource extends JsonResource
                 'next_available_at' => $this->next_available_at?->toISOString(),
             ],
             'reputation_stats' => [
-                'avg_rating'           => (float) $this->avg_rating,
+                'avg_rating'           => ((int) $this->total_reviews) > 0 ? (float) $this->avg_rating : null,
                 'total_reviews'        => (int) $this->total_reviews,
                 'total_jobs_completed' => (int) $this->total_jobs_completed,
                 'completion_rate'      => (float) $this->completion_rate,

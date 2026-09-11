@@ -47,7 +47,7 @@ class ConversationController extends Controller
                 'provider_id' => $conversation->provider_id,
                 'provider_name' => $providerUser?->name ?? 'Profesional',
                 'provider_avatar' => $providerUser?->avatar_url,
-                'provider_rating' => (float) ($providerProfile?->avg_rating ?? 5.0),
+                'provider_rating' => ($providerProfile?->total_reviews ?? 0) > 0 ? (float) $providerProfile->avg_rating : null,
                 'provider_reviews' => (int) ($providerProfile?->total_reviews ?? 0),
                 'category_name' => $conversation->serviceRequest?->category?->name ?? 'Servicio general',
                 'raw_prompt' => $conversation->serviceRequest?->raw_prompt ?? '',

@@ -25,7 +25,9 @@ class MatchCardResource extends JsonResource
                 'avatar_url' => $user?->avatar_url,
                 'bio' => $provider?->bio,
                 'is_verified' => $provider?->is_verified ?? false,
-                'avg_rating' => (float) ($snapshot['avg_rating'] ?? $provider?->avg_rating ?? 5.0),
+                'avg_rating' => ($snapshot['total_reviews'] ?? $provider?->total_reviews ?? 0) > 0
+                    ? (float) ($snapshot['avg_rating'] ?? $provider?->avg_rating)
+                    : null,
                 'total_reviews' => (int) ($snapshot['total_reviews'] ?? $provider?->total_reviews ?? 0),
                 'price_from' => $snapshot['price_from'] ?? null,
                 'availability_status' => $snapshot['availability_status'] ?? 'available',
