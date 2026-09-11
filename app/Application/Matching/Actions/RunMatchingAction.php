@@ -9,12 +9,11 @@ use Illuminate\Support\Collection;
 final class RunMatchingAction
 {
     private const WEIGHTS = [
-        'reputation'    => 0.25,
+        'reputation'    => 0.30,
         'distance'      => 0.25,
         'availability'  => 0.20,
         'experience'    => 0.15,
         'response_rate' => 0.10,
-        'verified'      => 0.05,
     ];
 
     private const RANDOM_BAND   = 0.03;
@@ -71,7 +70,10 @@ final class RunMatchingAction
         $requestStartArg = null;
         $requestEndArg = null;
 
-        if ($requestDateStr) {
+        if ($urgencyVal === 'immediate') {
+            $requestStartArg = \Carbon\Carbon::now('America/Argentina/Buenos_Aires');
+            $requestEndArg = $requestStartArg->copy()->addMinutes(60);
+        } elseif ($requestDateStr) {
             if ($request->window_start && $request->window_end) {
                 $startStr = trim($request->window_start);
                 $endStr = trim($request->window_end);
@@ -96,6 +98,9 @@ final class RunMatchingAction
         $requestEndUtcStr = $requestEndArg?->utc()->toIso8601String();
 
         $query = ProviderProfileModel::query()
+            ->whereHas('mvu', function ($q) {
+                $q->where('overall_verification_status', 'approved');
+            })
             ->where('availability_status', '!=', 'unavailable')
             ->whereHas('categories', function ($q) use ($request) {
                 $q->where('category_id', $request->category_id)
@@ -146,21 +151,18 @@ final class RunMatchingAction
                       });
                 });
             })
-            ->whereDoesntHave('works', function ($q) use ($requestStartUtcStr, $requestEndUtcStr) {
-                $q->whereIn('status', ['confirmed', 'in_progress'])
-                  ->whereNotNull('scheduled_at');
-
-                if ($requestStartUtcStr && $requestEndUtcStr) {
-                    // FIX: Correct interval overlap logic: work_start < window_end AND work_end > window_start
-                    // Using either scheduled_ends_at (if not null) or calculated from estimated_duration_min
-                    $q->whereRaw("
+            ->when($requestStartUtcStr && $requestEndUtcStr, function ($q) use ($requestStartUtcStr, $requestEndUtcStr) {
+                $q->whereDoesntHave('works', function ($sq) use ($requestStartUtcStr, $requestEndUtcStr) {
+                    $sq->whereIn('status', ['confirmed', 'in_progress'])
+                      ->whereNotNull('scheduled_at')
+                      ->whereRaw("
                         scheduled_at < ?
                         AND (
                             COALESCE(scheduled_ends_at, scheduled_at + (COALESCE(estimated_duration_min, 60) || ' minutes')::interval)
                             > ?
                         )
                     ", [$requestEndUtcStr, $requestStartUtcStr]);
-                }
+                });
             })
             ->with(['categories' => function ($q) use ($request) {
                 $q->where('category_id', $request->category_id);
@@ -177,7 +179,6 @@ final class RunMatchingAction
             'availability'  => $this->scoreAvailability($provider, $request),
             'experience'    => $this->scoreExperience($provider, $request),
             'response_rate' => round(($provider->response_rate ?? 100) / 100, 4),
-            'verified'      => $provider->is_verified ? 1.0 : 0.0,
         ];
     }
 
@@ -209,12 +210,9 @@ final class RunMatchingAction
     private function scoreDistance($provider, $request): float
     {
         if ($request->is_remote) return 1.0;
-        if (!$request->location_lat || !$provider->base_lat) return 0.5;
-
-        $distanceKm = $this->calculateDistanceKm(
-            (float)$provider->base_lat, (float)$provider->base_lng,
-            (float)$request->location_lat, (float)$request->location_lng
-        );
+        
+        $distanceKm = $this->getEffectiveDistanceKm($provider, $request);
+        if ($distanceKm === null) return 0.5;
 
         return round(max(0, 1 - ($distanceKm / self::MAX_DISTANCE)), 4);
     }
@@ -262,14 +260,9 @@ final class RunMatchingAction
 
     private function buildSnapshot($provider, $request): array
     {
-        $distanceKm = ($request->location_lat && $provider->base_lat)
-            ? $this->calculateDistanceKm(
-                (float)$provider->base_lat, (float)$provider->base_lng,
-                (float)$request->location_lat, (float)$request->location_lng
-              )
-            : null;
+        $distanceKm = $this->getEffectiveDistanceKm($provider, $request);
 
-        $etaMinutes = $distanceKm
+        $etaMinutes = $distanceKm !== null
             ? (int) ceil(($distanceKm / 30) * 60) + 5
             : null;
 
@@ -279,7 +272,7 @@ final class RunMatchingAction
             : (string) $provider->availability_status;
 
         return [
-            'distance_km'         => $distanceKm ? round($distanceKm, 1) : null,
+            'distance_km'         => $distanceKm !== null ? round($distanceKm, 1) : null,
             'eta_minutes'         => $etaMinutes,
             'availability_status' => $status,
             'next_available_at'   => $provider->next_available_at?->toISOString(),
@@ -287,6 +280,35 @@ final class RunMatchingAction
             'total_reviews'       => (int) $provider->total_reviews,
             'price_from'          => $categoryData?->price_from ? (float)$categoryData->price_from : null,
         ];
+    }
+
+    private function getEffectiveDistanceKm($provider, $request): ?float
+    {
+        if (!$request->location_lat || !$request->location_lng) return null;
+
+        $minDistance = null;
+        if ($provider->base_lat && $provider->base_lng) {
+            $minDistance = $this->calculateDistanceKm(
+                (float)$provider->base_lat, (float)$provider->base_lng,
+                (float)$request->location_lat, (float)$request->location_lng
+            );
+        }
+
+        if ($provider->relationLoaded('serviceAreas') || $provider->serviceAreas) {
+            foreach ($provider->serviceAreas as $sa) {
+                if ($sa->center_lat && $sa->center_lng) {
+                    $d = $this->calculateDistanceKm(
+                        (float)$sa->center_lat, (float)$sa->center_lng,
+                        (float)$request->location_lat, (float)$request->location_lng
+                    );
+                    if ($minDistance === null || $d < $minDistance) {
+                        $minDistance = $d;
+                    }
+                }
+            }
+        }
+
+        return $minDistance;
     }
 
     private function calculateDistanceKm(
