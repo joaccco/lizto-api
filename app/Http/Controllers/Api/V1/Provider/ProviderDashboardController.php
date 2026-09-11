@@ -40,6 +40,21 @@ class ProviderDashboardController extends Controller
     public function workRequests(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        if ($user && app(\App\Domain\Trust\Services\BanService::class)->isBanned($user)) {
+            return response()->json([
+                'message' => 'Tu cuenta se encuentra suspendida.',
+                'errors' => ['account' => ['Cuenta suspendida.']],
+            ], 403);
+        }
+
+        if ($user && app(\App\Domain\Trust\Services\BanService::class)->hasActiveRestriction($user, 'cannot_accept_requests')) {
+            return response()->json([
+                'message' => 'Tu cuenta tiene una restricción activa para recibir solicitudes.',
+                'errors' => ['account' => ['Restricción activa.']],
+            ], 403);
+        }
+
         $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
 
         if (!$providerProfile) {
@@ -88,13 +103,13 @@ class ProviderDashboardController extends Controller
                 'id' => $sr->uuid,
                 'work_id' => $work?->uuid,
                 'conversation_id' => $work?->conversation?->uuid,
-                'category' => $sr->category ? $sr->category->name : 'Servicio general',
-                'category_slug' => $sr->category ? $sr->category->slug : 'general',
+                'category' => $sr->category ? $sr->category->name : null,
+                'category_slug' => $sr->category ? $sr->category->slug : null,
                 'raw_prompt' => $sr->raw_prompt,
                 'client_name' => $sr->client ? explode(' ', $sr->client->name)[0] : 'Cliente',
                 'urgency' => $sr->urgency instanceof \BackedEnum ? $sr->urgency->value : $sr->urgency,
                 'status' => $effectiveStatus,
-                'estimated_duration_min' => $work?->estimated_duration_min ?? 60,
+                'estimated_duration_min' => $work?->estimated_duration_min,
                 'created_at' => $sr->created_at?->toISOString(),
                 'schedule' => static::formatScheduleBlock($sr),
             ], $locationData);
@@ -130,7 +145,7 @@ class ProviderDashboardController extends Controller
                 'client_name' => $work->client ? $work->client->name : 'Cliente',
                 'client_email' => $work->client ? $work->client->email : '',
                 'job_type' => $work->serviceRequest?->raw_prompt ?? 'Servicio agendado',
-                'category' => $work->serviceRequest?->category?->name ?? 'Servicio general',
+                'category' => $work->serviceRequest?->category?->name ?? null,
                 'address' => $work->work_address ?? 'Domicilio del cliente',
                 'status' => $work->status->value,
                 'scheduled_at' => $scheduledAt?->toISOString(),
@@ -138,7 +153,7 @@ class ProviderDashboardController extends Controller
                 'month' => (int) $scheduledAt->format('n'),
                 'year' => (int) $scheduledAt->format('Y'),
                 'time' => $scheduledAt->format('H:i'),
-                'estimated_duration_min' => $work->estimated_duration_min ?? 60,
+                'estimated_duration_min' => $work->estimated_duration_min,
                 'agreed_price' => $work->agreed_price,
                 'schedule' => static::formatScheduleBlock($work->serviceRequest),
             ];
@@ -151,7 +166,7 @@ class ProviderDashboardController extends Controller
                 'client_name' => $work->client ? $work->client->name : 'Cliente',
                 'client_email' => $work->client ? $work->client->email : '',
                 'job_type' => $work->serviceRequest?->raw_prompt ?? 'Servicio pendiente de coordinar',
-                'category' => $work->serviceRequest?->category?->name ?? 'Servicio general',
+                'category' => $work->serviceRequest?->category?->name ?? null,
                 'address' => $work->work_address ?? 'Domicilio del cliente',
                 'status' => $work->status->value,
                 'scheduled_at' => null,
@@ -159,7 +174,7 @@ class ProviderDashboardController extends Controller
                 'month' => null,
                 'year' => null,
                 'time' => 'A coordinar',
-                'estimated_duration_min' => $work->estimated_duration_min ?? 60,
+                'estimated_duration_min' => $work->estimated_duration_min,
                 'agreed_price' => $work->agreed_price,
                 'schedule' => static::formatScheduleBlock($work->serviceRequest),
             ];
@@ -260,6 +275,19 @@ class ProviderDashboardController extends Controller
         \Illuminate\Support\Facades\Gate::authorize('respond', $serviceRequest);
 
         $user = $request->user();
+
+        if ($user && app(\App\Domain\Trust\Services\BanService::class)->isBanned($user)) {
+            return response()->json([
+                'message' => 'Tu cuenta se encuentra suspendida.',
+            ], 403);
+        }
+
+        if ($user && app(\App\Domain\Trust\Services\BanService::class)->hasActiveRestriction($user, 'cannot_accept_requests')) {
+            return response()->json([
+                'message' => 'Tu cuenta tiene una restricción activa para aceptar solicitudes.',
+            ], 403);
+        }
+
         $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
         if (!$providerProfile) {
             return response()->json(['message' => 'Perfil de proveedor no encontrado.'], 404);
