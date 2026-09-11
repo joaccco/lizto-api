@@ -44,7 +44,7 @@ return [
     'didit' => [
         'base_url' => env('DIDIT_BASE_URL', 'https://verification.didit.me/v3'),
         'api_key' => env('DIDIT_API_KEY', ''),
-        'workflow_id' => env('DIDIT_WORKFLOW_ID', '1a3cf8eb-1e92-4554-bb91-2017577cf811'),
+        'workflow_id' => env('DIDIT_WORKFLOW_ID'),
         'webhook_secret' => env('DIDIT_WEBHOOK_SECRET', ''),
         'timeout' => (int) env('DIDIT_TIMEOUT', 15),
     ],

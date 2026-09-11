@@ -34,7 +34,10 @@ class IdentityService
             ];
         }
 
-        $workflowId = config('services.didit.workflow_id', '1a3cf8eb-1e92-4554-bb91-2017577cf811');
+        $workflowId = config('services.didit.workflow_id');
+        if (empty($workflowId)) {
+            throw new \RuntimeException('DIDIT_WORKFLOW_ID is not configured. Identity verification requires a valid workflow ID.');
+        }
         $vendorData = (string) ($user->uuid ?? $user->id);
 
         $params = [

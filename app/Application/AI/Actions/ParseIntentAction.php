@@ -8,16 +8,15 @@ use App\Infrastructure\Persistence\Eloquent\SurveyQuestionModel;
 
 class ParseIntentAction
 {
-    private array $categoryKeywords = [
-        'cerrajeria' => ['cerrajero', 'cerradura', 'llave', 'candado', 'apertura', 'afuera'],
-        'electricidad' => ['electricista', 'luz', 'cable', 'enchufe', 'cortocircuito', 'tablero'],
-        'plomeria' => ['plomero', 'caño', 'cano', 'pérdida', 'perdida', 'agua', 'canilla'],
-        'fotografia' => ['fotógrafo', 'fotografo', 'fotografía', 'fotografia', 'sesión', 'sesion', 'fotos'],
-        'abogacia' => ['abogado', 'legal', 'contrato', 'juicio'],
-        'contaduria' => ['contador', 'impuestos', 'factura', 'contabilidad'],
-        'diseno' => ['diseñador', 'disenador', 'diseño', 'diseno', 'logo', 'branding'],
-        'limpieza' => ['limpieza', 'mucama', 'ordenar'],
-    ];
+    public function getCategoryKeywords(): array
+    {
+        $canonical = config('categories.canonical', []);
+        $keywords = [];
+        foreach ($canonical as $slug => $config) {
+            $keywords[$slug] = array_values(array_unique(array_merge($config['synonyms'] ?? [], $config['keywords'] ?? [])));
+        }
+        return $keywords;
+    }
 
     private array $urgencyKeywords = [
         'immediate' => ['urgente', 'ahora', 'ya', 'inmediato', 'emergencia'],
@@ -40,7 +39,8 @@ class ParseIntentAction
 
         // 1. Detección de Categoría
         $detectedCategorySlug = null;
-        foreach ($this->categoryKeywords as $slug => $keywords) {
+        $categoryKeywords = $this->getCategoryKeywords();
+        foreach ($categoryKeywords as $slug => $keywords) {
             foreach ($keywords as $kw) {
                 if (str_contains($normalizedPrompt, mb_strtolower($kw))) {
                     $detectedCategorySlug = $slug;

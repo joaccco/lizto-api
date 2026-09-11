@@ -121,24 +121,24 @@ class ClarificationAiService
         return [];
     }
 
+    public function getCategoryKeywords(): array
+    {
+        $canonical = config('categories.canonical', []);
+        $keywords = [];
+        foreach ($canonical as $slug => $config) {
+            $keywords[$slug] = array_values(array_unique(array_merge($config['synonyms'] ?? [], $config['keywords'] ?? [])));
+        }
+        return $keywords;
+    }
+
     private function fallbackClassify(string $prompt): array
     {
         $promptLower = mb_strtolower($prompt);
-        
-        $keywords = [
-            'plomeria' => ['plomero', 'fuga', 'caño', 'agua', 'canilla', 'gotera', 'inodoro', 'destape'],
-            'electricidad' => ['electricista', 'luz', 'térmica', 'cable', 'enchufe', 'cables', 'chispas'],
-            'cerrajeria' => ['cerrajero', 'llave', 'cerradura', 'puerta', 'candado', 'traba'],
-            'fotografia' => ['fotografo', 'fotógrafa', 'foto', 'fotos', 'boda', 'evento', 'retrato'],
-            'diseno' => ['diseñador', 'diseño', 'logo', 'branding', 'flyer', 'web', 'ui'],
-            'limpieza' => ['limpieza', 'limpiar', 'oficina', 'mudanza', 'profunda'],
-            'contaduria' => ['contador', 'contadora', 'monotributo', 'impuestos', 'balance', 'afip'],
-            'abogacia' => ['abogado', 'abogada', 'legal', 'juicio', 'despido', 'contrato', 'sucesion'],
-        ];
+        $keywords = $this->getCategoryKeywords();
 
         foreach ($keywords as $catSlug => $words) {
             foreach ($words as $word) {
-                if (str_contains($promptLower, $word)) {
+                if (str_contains($promptLower, mb_strtolower($word))) {
                     $cat = CategoryModel::where('slug', $catSlug)->first();
                     $serviceType = ServiceTypeModel::where('category_id', $cat?->id)->first();
                     return [
