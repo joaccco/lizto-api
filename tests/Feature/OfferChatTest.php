@@ -57,6 +57,11 @@ class OfferChatTest extends TestCase
             'coverage_radius_km' => 15,
         ]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $profile->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         return [$user, $profile];
     }
 

@@ -151,11 +151,39 @@ class ProviderProfileModel extends Model
         );
     }
 
-    public function scopeEligibleForMatching($query)
+    /**
+     * Scope para filtrar profesionales cuya identidad fue verificada y aprobada vía MVU.
+     * Única autoridad de verificación (SEC-04).
+     */
+    public function scopeVerifiedIdentity($query)
     {
         return $query->whereHas('mvu', function ($q) {
             $q->where('overall_verification_status', 'approved');
-        })->where('availability_status', AvailabilityStatus::Available);
+        });
+    }
+
+    /**
+     * Responde si el profesional está habilitado operativamente por tener identidad verificada.
+     * Única autoridad de verificación en el sistema: MVU con estado 'approved'.
+     */
+    public function isIdentityVerified(): bool
+    {
+        return $this->mvu?->overall_verification_status === 'approved';
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->isIdentityVerified();
+    }
+
+    public function isHabilitado(): bool
+    {
+        return $this->isIdentityVerified();
+    }
+
+    public function scopeEligibleForMatching($query)
+    {
+        return $query->verifiedIdentity()->where('availability_status', AvailabilityStatus::Available);
     }
 
     public function scopeAvailable($query)

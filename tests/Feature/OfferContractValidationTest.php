@@ -57,6 +57,11 @@ class OfferContractValidationTest extends TestCase
         ]);
         $providerProfile->categories()->create(['category_id' => $category->id]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $providerProfile->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         return [$providerUser, $sr];
     }
 

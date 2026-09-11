@@ -98,9 +98,7 @@ final class RunMatchingAction
         $requestEndUtcStr = $requestEndArg?->utc()->toIso8601String();
 
         $query = ProviderProfileModel::query()
-            ->whereHas('mvu', function ($q) {
-                $q->where('overall_verification_status', 'approved');
-            })
+            ->verifiedIdentity()
             ->where('availability_status', '!=', 'unavailable')
             ->whereHas('categories', function ($q) use ($request) {
                 $q->where('category_id', $request->category_id)
@@ -166,9 +164,9 @@ final class RunMatchingAction
             })
             ->with(['categories' => function ($q) use ($request) {
                 $q->where('category_id', $request->category_id);
-            }, 'user', 'serviceAreas']);
+            }, 'user', 'serviceAreas', 'mvu']);
 
-        return $query->get();
+        return $query->get()->filter(fn (ProviderProfileModel $provider) => $provider->isIdentityVerified())->values();
     }
 
     private function calculateBreakdown($provider, $request): array
