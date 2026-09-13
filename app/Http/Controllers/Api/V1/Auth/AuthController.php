@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Auth;
 
+use App\Domain\Users\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\LoginRequest;
@@ -47,7 +48,7 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->status === 'suspended') {
+        if ($user->status === UserStatus::Suspended) {
             return response()->json([
                 'message' => 'Tu cuenta está suspendida.',
                 'errors'  => ['account' => ['Cuenta suspendida.']],

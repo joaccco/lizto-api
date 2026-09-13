@@ -17,7 +17,7 @@ class WorkCompletionPolicy
             ]);
         }
 
-        if ($work->status === \App\Domain\Works\Enums\WorkStatus::PendingDiagnosisQuote || $work->status === \App\Domain\Works\Enums\WorkStatus::PendingDiagnosisQuote->value) {
+        if ($work->status === \App\Domain\Works\Enums\WorkStatus::PendingDiagnosisQuote) {
             if ($work->estimated_duration_min === null) {
                 throw ValidationException::withMessages([
                     'work' => ['No se puede completar el trabajo sin una duración estimada definida.'],

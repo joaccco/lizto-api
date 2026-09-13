@@ -23,7 +23,7 @@ class AcceptOfferAction
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($offer->status === OfferStatus::Accepted || $offer->status->value === 'accepted') {
+            if ($offer->status === OfferStatus::Accepted) {
                 throw new \DomainException('Esta oferta ya fue aceptada previamente.', 409);
             }
 

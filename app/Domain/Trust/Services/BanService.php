@@ -103,7 +103,7 @@ class BanService
      */
     public function isBanned(UserModel $user): bool
     {
-        if ($user->status === UserStatus::Suspended || $user->status === 'suspended') {
+        if ($user->status === UserStatus::Suspended) {
             return true;
         }
 

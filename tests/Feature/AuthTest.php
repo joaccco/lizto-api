@@ -148,4 +148,22 @@ class AuthTest extends TestCase
 
         $response->assertStatus(200);
     }
+
+    public function test_suspended_user_cannot_login(): void
+    {
+        $user = UserModel::create([
+            'name'     => 'Suspended User',
+            'email'    => 'suspended@test.com',
+            'password' => Hash::make('Password123'),
+            'status'   => \App\Domain\Users\Enums\UserStatus::Suspended,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email'    => 'suspended@test.com',
+            'password' => 'Password123',
+        ]);
+
+        $response->assertStatus(403)
+                 ->assertJsonPath('message', 'Tu cuenta está suspendida.');
+    }
 }
