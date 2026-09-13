@@ -20,7 +20,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/register', [AuthController::class, 'register'])->middleware($throttleLogin)->name('register');
         Route::post('/login',    [AuthController::class, 'login'])->middleware($throttleLogin)->name('login');
 
-        Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
+        Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureUserNotSuspended::class, $throttleProtected])->group(function () {
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::post('/become-provider', [AuthController::class, 'becomeProvider'])->name('logout');
             Route::get('/me',      [ProfileController::class, 'me'])->name('me');
@@ -39,7 +39,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     });
 
     // Rutas protegidas (auth:sanctum)
-    Route::middleware(['auth:sanctum', $throttleProtected])->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureUserNotSuspended::class, $throttleProtected])->group(function () {
         // Device Management (Push Notifications Infrastructure)
         Route::post('/devices', [\App\Http\Controllers\Api\V1\Devices\UserDeviceController::class, 'store'])->name('devices.store');
         Route::delete('/devices', [\App\Http\Controllers\Api\V1\Devices\UserDeviceController::class, 'destroy'])->name('devices.destroy');
