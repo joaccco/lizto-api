@@ -293,6 +293,12 @@ class ProviderDashboardController extends Controller
             return response()->json(['message' => 'Perfil de proveedor no encontrado.'], 404);
         }
 
+        if (!$providerProfile->isIdentityVerified()) {
+            return response()->json([
+                'message' => 'Solo los profesionales con identidad verificada pueden confirmar solicitudes.',
+            ], 403);
+        }
+
         // Si ya existe un trabajo confirmado para este pedido y profesional, retornarlo de forma idempotente
         $existingWork = \App\Infrastructure\Persistence\Eloquent\WorkModel::where('service_request_id', $serviceRequest->id)
             ->where('provider_id', $providerProfile->id)

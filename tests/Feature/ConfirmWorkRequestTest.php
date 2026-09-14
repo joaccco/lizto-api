@@ -33,6 +33,11 @@ class ConfirmWorkRequestTest extends TestCase
             'is_verified' => true,
         ]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $profile->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         $category = CategoryModel::create([
             'uuid' => (string) Str::uuid(),
             'name' => 'Cerrajería',

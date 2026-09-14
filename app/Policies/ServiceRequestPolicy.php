@@ -30,7 +30,7 @@ class ServiceRequestPolicy
     public function respond(UserModel $user, ServiceRequestModel $serviceRequest): bool
     {
         $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
-        if (!$providerProfile) {
+        if (!$providerProfile || !$providerProfile->isIdentityVerified()) {
             return false;
         }
 

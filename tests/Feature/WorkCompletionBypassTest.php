@@ -37,12 +37,19 @@ class WorkCompletionBypassTest extends TestCase
 
     private function createProvider(UserModel $user): ProviderProfileModel
     {
-        return ProviderProfileModel::create([
+        $provider = ProviderProfileModel::create([
             'uuid'        => (string) Str::uuid(),
             'user_id'     => $user->id,
             'status'      => ProviderProfileStatus::Verified,
             'is_verified' => true,
         ]);
+
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $provider->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
+        return $provider;
     }
 
     private function createWork(UserModel $client, ProviderProfileModel $provider, array $attrs = []): WorkModel

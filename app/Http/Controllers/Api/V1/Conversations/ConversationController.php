@@ -8,6 +8,7 @@ use App\Domain\Offers\Services\ContactInfoGuard;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Persistence\Eloquent\ConversationModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -73,6 +74,11 @@ class ConversationController extends Controller
 
         if (!$conversation) {
             return response()->json(['message' => 'Conversación no encontrada.'], 404);
+        }
+
+        $providerProfile = ProviderProfileModel::where('user_id', $request->user()->id)->first();
+        if ($providerProfile && (int) $conversation->provider_id === (int) $providerProfile->id && !$providerProfile->isIdentityVerified()) {
+            return response()->json(['message' => 'Solo los profesionales con identidad verificada pueden enviar mensajes.'], 403);
         }
 
         Gate::authorize('sendMessage', $conversation);

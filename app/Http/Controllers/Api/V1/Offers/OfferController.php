@@ -185,6 +185,10 @@ class OfferController extends Controller
     {
         $offer = OfferModel::where('uuid', $id)->firstOrFail();
 
+        if (!$offer->provider || !$offer->provider->isIdentityVerified()) {
+            return response()->json(['message' => 'El profesional que realizó esta oferta ya no cuenta con identidad verificada.'], 403);
+        }
+
         try {
             $result = $this->acceptOfferAction->execute($offer);
             return response()->json([

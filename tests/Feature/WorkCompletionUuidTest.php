@@ -50,6 +50,11 @@ class WorkCompletionUuidTest extends TestCase
             'coverage_radius_km' => 15,
         ]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $providerProfile->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         // 1. Create ServiceRequest
         $serviceRequest = ServiceRequestModel::create([
             'uuid' => (string) Str::uuid(),

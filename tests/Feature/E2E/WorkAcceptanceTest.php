@@ -73,6 +73,11 @@ class WorkAcceptanceTest extends TestCase
             'base_address' => 'Balvanera, CABA',
         ]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $this->providerProfile1->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         ProviderCategoryModel::create([
             'provider_id' => $this->providerProfile1->id,
             'category_id' => $this->category->id,
@@ -107,6 +112,11 @@ class WorkAcceptanceTest extends TestCase
             'base_lat' => -34.6037,
             'base_lng' => -58.3816,
             'base_address' => 'Palermo, CABA',
+        ]);
+
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $this->providerProfile2->id,
+            'overall_verification_status' => 'approved',
         ]);
     }
 

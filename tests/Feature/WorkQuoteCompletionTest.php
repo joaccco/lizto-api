@@ -56,16 +56,28 @@ class WorkQuoteCompletionTest extends TestCase
         ]);
     }
 
-    public function test_cannot_complete_work_without_client_accepted_quote(): void
+    private function createProvider(UserModel $providerUser): ProviderProfileModel
     {
-        $client = $this->createUser('client');
-        $providerUser = $this->createUser('provider');
         $provider = ProviderProfileModel::create([
             'uuid' => (string) Str::uuid(),
             'user_id' => $providerUser->id,
             'status' => ProviderProfileStatus::Verified,
             'is_verified' => true,
         ]);
+
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $provider->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
+        return $provider;
+    }
+
+    public function test_cannot_complete_work_without_client_accepted_quote(): void
+    {
+        $client = $this->createUser('client');
+        $providerUser = $this->createUser('provider');
+        $provider = $this->createProvider($providerUser);
 
         $work = $this->createWork($client, $provider);
 
@@ -84,12 +96,7 @@ class WorkQuoteCompletionTest extends TestCase
     {
         $client = $this->createUser('client');
         $providerUser = $this->createUser('provider');
-        $provider = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
-            'user_id' => $providerUser->id,
-            'status' => ProviderProfileStatus::Verified,
-            'is_verified' => true,
-        ]);
+        $provider = $this->createProvider($providerUser);
 
         $work = $this->createWork($client, $provider);
 
@@ -118,12 +125,7 @@ class WorkQuoteCompletionTest extends TestCase
     {
         $client = $this->createUser('client');
         $providerUser = $this->createUser('provider');
-        $provider = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
-            'user_id' => $providerUser->id,
-            'status' => ProviderProfileStatus::Verified,
-            'is_verified' => true,
-        ]);
+        $provider = $this->createProvider($providerUser);
 
         $work = $this->createWork($client, $provider);
 
@@ -159,12 +161,7 @@ class WorkQuoteCompletionTest extends TestCase
     {
         $client = $this->createUser('client');
         $providerUser = $this->createUser('provider');
-        $provider = ProviderProfileModel::create([
-            'uuid' => (string) Str::uuid(),
-            'user_id' => $providerUser->id,
-            'status' => ProviderProfileStatus::Verified,
-            'is_verified' => true,
-        ]);
+        $provider = $this->createProvider($providerUser);
 
         $work = $this->createWork($client, $provider);
         $quote = WorkQuoteModel::create([

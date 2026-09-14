@@ -37,6 +37,10 @@ class WorkQuoteController extends Controller
             return response()->json(['message' => 'Solo el profesional asignado puede emitir presupuestos.'], 403);
         }
 
+        if (!$work->provider || !$work->provider->isIdentityVerified()) {
+            return response()->json(['message' => 'Solo los profesionales con identidad verificada pueden emitir presupuestos.'], 403);
+        }
+
         if ($this->isWorkClosed($work)) {
             return response()->json(['message' => 'No se pueden emitir presupuestos para trabajos finalizados o cancelados.'], 422);
         }

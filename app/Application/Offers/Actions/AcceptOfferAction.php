@@ -27,6 +27,11 @@ class AcceptOfferAction
                 throw new \DomainException('Esta oferta ya fue aceptada previamente.', 409);
             }
 
+            // Door 8: Verify provider identity
+            if (!$offer->provider || !$offer->provider->isIdentityVerified()) {
+                throw new \DomainException('El profesional que realizó esta oferta ya no cuenta con identidad verificada.', 403);
+            }
+
             // 1. Guard against multiple active accepted offers
             $existingAccepted = OfferModel::where('service_request_id', $serviceRequest->id)
                 ->where('status', OfferStatus::Accepted->value)

@@ -216,6 +216,11 @@ class WorkController extends Controller
             return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
+        $providerProfile = ProviderProfileModel::where('user_id', $request->user()->id)->first();
+        if (!$providerProfile || !$providerProfile->isIdentityVerified()) {
+            return response()->json(['message' => 'Solo los profesionales con identidad verificada pueden enviar presupuestos finales.'], 403);
+        }
+
         \Illuminate\Support\Facades\Gate::authorize('submitFinalQuote', $work);
 
         $hasAcceptedQuote = \App\Infrastructure\Persistence\Eloquent\WorkQuoteModel::where('work_id', $work->id)

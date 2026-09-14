@@ -50,6 +50,11 @@ class ConversationAuthorizationTest extends TestCase
             'is_verified' => true,
         ]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $proProfile->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         $sr = ServiceRequestModel::create([
             'uuid' => (string) Str::uuid(),
             'client_id' => $client->id,

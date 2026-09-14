@@ -70,6 +70,11 @@ class EdgeCasesTest extends TestCase
             'availability_status' => 'available',
         ]);
 
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $this->providerProfile1->id,
+            'overall_verification_status' => 'approved',
+        ]);
+
         $this->provider2 = UserModel::create([
             'uuid' => (string) Str::uuid(),
             'name' => 'Provider Beta',
@@ -86,6 +91,11 @@ class EdgeCasesTest extends TestCase
             'is_verified' => true,
             'status' => ProviderProfileStatus::Verified,
             'availability_status' => 'available',
+        ]);
+
+        \App\Models\ProfessionalMVU::create([
+            'provider_id' => $this->providerProfile2->id,
+            'overall_verification_status' => 'approved',
         ]);
 
         $this->unauthorizedUser = UserModel::create([

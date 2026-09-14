@@ -21,7 +21,16 @@ class ConversationPolicy
      */
     public function sendMessage(UserModel $user, ConversationModel $conversation): bool
     {
-        return $this->isParticipant($user, $conversation);
+        if ((int) $conversation->client_id === (int) $user->id) {
+            return true;
+        }
+
+        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
+        if ($providerProfile && (int) $conversation->provider_id === (int) $providerProfile->id) {
+            return $providerProfile->isIdentityVerified();
+        }
+
+        return false;
     }
 
     private function isParticipant(UserModel $user, ConversationModel $conversation): bool
