@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Works;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Persistence\Eloquent\ProviderProfileModel;
 use App\Infrastructure\Persistence\Eloquent\RatingModel;
+use App\Infrastructure\Persistence\Eloquent\WorkEventModel;
 use App\Infrastructure\Persistence\Eloquent\WorkModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,16 +66,27 @@ class WorkController extends Controller
 
         \Illuminate\Support\Facades\Gate::authorize('cancel', $work);
 
+        $user = $request->user();
         $reason = $request->input('reason', 'Cancelado por el usuario');
 
         $work->transitionTo(\App\Domain\Works\Enums\WorkStatus::Cancelled);
-        $work->update([
-            'cancellation_reason' => $reason,
-        ]);
 
-        if ($work->provider) {
+        $isProvider = $work->provider && (int) $work->provider->user_id === (int) $user->id;
+        $cancelledBy = $isProvider ? 'provider' : 'client';
+
+        if ($isProvider && $work->provider) {
             $work->provider->increment('cancellation_count');
         }
+
+        WorkEventModel::create([
+            'work_id' => $work->id,
+            'event_type' => 'cancelled',
+            'actor_id' => $user->id,
+            'metadata' => [
+                'cancelled_by' => $cancelledBy,
+                'reason' => $reason,
+            ],
+        ]);
 
         return response()->json([
             'message' => 'Trabajo cancelado correctamente.',
@@ -82,6 +94,7 @@ class WorkController extends Controller
                 'id' => $work->uuid,
                 'status' => 'cancelled',
                 'reason' => $reason,
+                'cancelled_by' => $cancelledBy,
             ],
         ]);
     }
