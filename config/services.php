@@ -47,6 +47,8 @@ return [
         'workflow_id' => env('DIDIT_WORKFLOW_ID'),
         'webhook_secret' => env('DIDIT_WEBHOOK_SECRET', ''),
         'timeout' => (int) env('DIDIT_TIMEOUT', 15),
+        'mode' => env('DIDIT_MODE', null),
+        'sandbox_scenario' => env('DIDIT_SANDBOX_SCENARIO', null),
     ],
 
 ];

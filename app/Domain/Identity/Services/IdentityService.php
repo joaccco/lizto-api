@@ -10,6 +10,7 @@ use App\Models\Identity;
 use App\Models\ProfessionalMVU;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class IdentityService
 {
@@ -54,6 +55,28 @@ class IdentityService
 
         if (!empty($options['metadata'])) {
             $params['metadata'] = is_array($options['metadata']) ? json_encode($options['metadata']) : (string) $options['metadata'];
+        }
+
+        $scenario = $options['sandbox_scenario'] ?? config('services.didit.sandbox_scenario');
+        if (!empty($scenario)) {
+            if (app()->environment('production')) {
+                throw new \RuntimeException('Cannot use Didit sandbox scenario in production environment.');
+            }
+
+            $diditMode = config('services.didit.mode');
+            if ($diditMode === 'live') {
+                throw new \RuntimeException("Contradictory Didit configuration: cannot send sandbox scenario '{$scenario}' when Didit mode is configured as 'live'.");
+            }
+
+            if ($diditMode !== 'sandbox') {
+                throw new \RuntimeException("Didit sandbox scenario '{$scenario}' requires Didit mode to be explicitly configured as 'sandbox' (DIDIT_MODE=sandbox). Current mode: " . ($diditMode ?: 'not configured') . '.');
+            }
+
+            if ($scenario !== 'approve' && !str_starts_with($scenario, 'decline_') && !str_starts_with($scenario, 'review_')) {
+                throw new \InvalidArgumentException("Invalid Didit sandbox_scenario '{$scenario}'. Allowed values are 'approve', 'decline_*', or 'review_*'.");
+            }
+
+            $params['sandbox_scenario'] = $scenario;
         }
 
         $sessionData = $this->identityProvider->createSession($params);
@@ -138,6 +161,22 @@ class IdentityService
 
         // If identity wasn't found by session_id, attempt to correlate via vendor_data
         if (!$identity && !empty($decision['vendor_data'])) {
+            // users.uuid es de tipo uuid en Postgres: consultarla con texto que
+            // no es un UUID lanza SQLSTATE[22P02] y devuelve 500, y Didit
+            // reintenta los 500 indefinidamente. Se valida antes de consultar.
+            if (!Str::isUuid($decision['vendor_data'])) {
+                Log::warning('Didit decision con vendor_data que no es un UUID', [
+                    'session_id' => $sessionId,
+                    'vendor_data' => $decision['vendor_data'],
+                ]);
+
+                return [
+                    'status' => 'not_found',
+                    'session_id' => $sessionId,
+                    'reason' => 'vendor_data_invalido',
+                ];
+            }
+
             $user = UserModel::where('uuid', $decision['vendor_data'])->first();
             if ($user) {
                 $identity = Identity::firstOrNew(['user_id' => $user->id]);

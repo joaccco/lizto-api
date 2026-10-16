@@ -13,6 +13,8 @@ class DiditIdentityProvider implements IdentityProviderContract
     protected string $apiKey;
     protected string $webhookSecret;
     protected int $timeout;
+    protected ?string $mode;
+    protected ?string $defaultScenario;
 
     public function __construct(array $config = [])
     {
@@ -20,6 +22,8 @@ class DiditIdentityProvider implements IdentityProviderContract
         $this->apiKey = $config['api_key'] ?? config('services.didit.api_key', '');
         $this->webhookSecret = $config['webhook_secret'] ?? config('services.didit.webhook_secret', '');
         $this->timeout = (int) ($config['timeout'] ?? config('services.didit.timeout', 15));
+        $this->mode = $config['mode'] ?? config('services.didit.mode');
+        $this->defaultScenario = $config['sandbox_scenario'] ?? config('services.didit.sandbox_scenario');
     }
 
     protected function client()
@@ -43,6 +47,31 @@ class DiditIdentityProvider implements IdentityProviderContract
 
         if (empty($params['vendor_data'])) {
             throw new \InvalidArgumentException('vendor_data is required to create a Didit session.');
+        }
+
+        if (empty($params['sandbox_scenario']) && !empty($this->defaultScenario)) {
+            $params['sandbox_scenario'] = $this->defaultScenario;
+        }
+
+        if (!empty($params['sandbox_scenario'])) {
+            $scenario = $params['sandbox_scenario'];
+
+            if (app()->environment('production')) {
+                throw new \RuntimeException('Cannot use Didit sandbox scenario in production environment.');
+            }
+
+            $mode = $this->mode ?? config('services.didit.mode');
+            if ($mode === 'live') {
+                throw new \RuntimeException("Contradictory Didit configuration: cannot send sandbox scenario '{$scenario}' when Didit mode is configured as 'live'.");
+            }
+
+            if ($mode !== 'sandbox') {
+                throw new \RuntimeException("Didit sandbox scenario '{$scenario}' requires Didit mode to be explicitly configured as 'sandbox' (DIDIT_MODE=sandbox). Current mode: " . ($mode ?: 'not configured') . '.');
+            }
+
+            if ($scenario !== 'approve' && !str_starts_with($scenario, 'decline_') && !str_starts_with($scenario, 'review_')) {
+                throw new \InvalidArgumentException("Invalid Didit sandbox_scenario '{$scenario}'. Allowed values are 'approve', 'decline_*', or 'review_*'.");
+            }
         }
 
         try {
@@ -147,53 +176,17 @@ class DiditIdentityProvider implements IdentityProviderContract
             return false;
         }
 
-        // 2. Serializar el cuerpo en JSON canónico: claves ordenadas alfabéticamente, sin espacios.
-        $canonicalJson = self::canonicalizeJson($rawPayload);
-
-        // 3. Concatenar timestamp y JSON canónico separados por dos puntos.
-        $toSign = "{$timestamp}:{$canonicalJson}";
-
-        // 4. Calcular HMAC-SHA256 de esa cadena con la clave compartida del webhook.
-        $computedSignature = hash_hmac('sha256', $toSign, $this->webhookSecret);
+        // 2. Didit firma el CUERPO CRUDO tal cual llega, sin timestamp ni
+        //    canonicalizacion. Verificado contra una entrega real de Didit
+        //    (sesion 68d3a20e-d1f6-4580-8142-351e1e1b0a3b, 2026-10-12).
+        $computedSignature = hash_hmac('sha256', $rawPayload, $this->webhookSecret);
 
         if (str_starts_with($signature, 'sha256=')) {
             $signature = substr($signature, 7);
         }
 
-        // 5. Comparar en tiempo constante.
+        // 3. Comparar en tiempo constante.
         return hash_equals($computedSignature, $signature);
     }
 
-    /**
-     * Canonicalize JSON recursively (keys sorted alphabetically, compact encoding).
-     */
-    public static function canonicalizeJson(mixed $data): string
-    {
-        $sortRecursive = function (&$item) use (&$sortRecursive) {
-            if (is_array($item)) {
-                if (!array_is_list($item)) {
-                    ksort($item, SORT_STRING);
-                }
-                foreach ($item as &$value) {
-                    $sortRecursive($value);
-                }
-            }
-        };
-
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $data = $decoded;
-            } else {
-                return $data;
-            }
-        }
-
-        if (is_array($data)) {
-            $sortRecursive($data);
-            return json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-
-        return (string) $data;
-    }
 }

@@ -131,9 +131,7 @@ class DiditIdentityProviderTest extends TestCase
         ]);
         $timestamp = (string) time();
 
-        $canonicalJson = DiditIdentityProvider::canonicalizeJson($payload);
-        $toSign = "{$timestamp}:{$canonicalJson}";
-        $validSignature = hash_hmac('sha256', $toSign, $this->secret);
+        $validSignature = hash_hmac('sha256', $payload, $this->secret);
 
         $this->assertTrue($this->provider->verifyWebhookSignature($payload, $validSignature, $timestamp));
         $this->assertTrue($this->provider->verifyWebhookSignature($payload, 'sha256=' . $validSignature, $timestamp));
@@ -152,32 +150,36 @@ class DiditIdentityProviderTest extends TestCase
         $payload = json_encode(['session_id' => 'sess_123', 'status' => 'approved']);
         $expiredTimestamp = (string) (time() - 301); // 5 min and 1 sec ago
 
-        $canonicalJson = DiditIdentityProvider::canonicalizeJson($payload);
-        $toSign = "{$expiredTimestamp}:{$canonicalJson}";
-        $signature = hash_hmac('sha256', $toSign, $this->secret);
+        $signature = hash_hmac('sha256', $payload, $this->secret);
 
         $this->assertFalse($this->provider->verifyWebhookSignature($payload, $signature, $expiredTimestamp));
     }
 
-    public function test_canonicalization_keys_order_independence(): void
+    public function test_verify_webhook_signature_is_over_raw_body_not_canonical_json(): void
     {
         $timestamp = (string) time();
 
-        // Object 1: keys in one order
+        // Mismo objeto, distinto orden de claves => distinto cuerpo crudo.
         $json1 = '{"status":"approved","session_id":"sess_123","details":{"b":2,"a":1}}';
-        // Object 2: keys in different order
         $json2 = '{"session_id":"sess_123","details":{"a":1,"b":2},"status":"approved"}';
 
-        $canon1 = DiditIdentityProvider::canonicalizeJson($json1);
-        $canon2 = DiditIdentityProvider::canonicalizeJson($json2);
+        $signature1 = hash_hmac('sha256', $json1, $this->secret);
 
-        $this->assertEquals($canon1, $canon2);
+        // Didit firma los bytes exactos del cuerpo: el cuerpo firmado valida...
+        $this->assertTrue($this->provider->verifyWebhookSignature($json1, $signature1, $timestamp));
+        // ...y cualquier reordenamiento NO valida (no hay canonicalizacion).
+        $this->assertFalse($this->provider->verifyWebhookSignature($json2, $signature1, $timestamp));
+    }
 
-        $toSign = "{$timestamp}:{$canon1}";
-        $signature = hash_hmac('sha256', $toSign, $this->secret);
+    public function test_verify_webhook_signature_accepts_real_didit_body(): void
+    {
+        // Cuerpo CRUDO byte a byte de una entrega real de Didit sandbox.
+        // El secreto real no vive en el repo: se firma el cuerpo real con el
+        // secreto de test, lo que valida el esquema contra la forma real.
+        $rawPayload = file_get_contents(__DIR__ . '/../../Fixtures/KYC/didit_webhook_real_body.json');
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $rawPayload, $this->secret);
 
-        // Both raw payloads must validate against the same signature
-        $this->assertTrue($this->provider->verifyWebhookSignature($json1, $signature, $timestamp));
-        $this->assertTrue($this->provider->verifyWebhookSignature($json2, $signature, $timestamp));
+        $this->assertTrue($this->provider->verifyWebhookSignature($rawPayload, $signature, $timestamp));
     }
 }

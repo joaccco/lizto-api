@@ -13,7 +13,8 @@ interface IdentityProviderContract
      *     callback?: string,
      *     metadata?: string,
      *     contact_details?: array,
-     *     expected_details?: array
+     *     expected_details?: array,
+     *     sandbox_scenario?: string
      * } $params
      * @return array{session_id: string, url: string, status: string, session_token?: string}
      */
@@ -31,8 +32,8 @@ interface IdentityProviderContract
      * Verify Didit V2 webhook signature.
      *
      * @param string $rawPayload
-     * @param string $signature Hex-encoded HMAC-SHA256 from X-Signature-V2 header
-     * @param string $timestamp Unix timestamp in seconds from X-Timestamp header
+     * @param string $signature Hex-encoded HMAC-SHA256 del cuerpo crudo, header X-Signature
+     * @param string $timestamp Unix timestamp en segundos, header X-Timestamp (solo ventana anti-replay)
      * @return bool
      */
     public function verifyWebhookSignature(string $rawPayload, string $signature, string $timestamp): bool;

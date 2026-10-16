@@ -18,7 +18,9 @@ class IdentityWebhookController extends Controller
 
     public function handleVerified(Request $request): JsonResponse
     {
-        $signature = $request->header('X-Signature-V2');
+        // Didit envia la firma en X-Signature. Se acepta X-Signature-V2 como
+        // alias defensivo por si el proveedor renombra el header en el futuro.
+        $signature = $request->header('X-Signature') ?: $request->header('X-Signature-V2');
         $timestamp = $request->header('X-Timestamp');
         $rawPayload = $request->getContent();
 
@@ -32,7 +34,7 @@ class IdentityWebhookController extends Controller
             return response()->json(['error' => 'Missing signature or timestamp header.'], 401);
         }
 
-        // Verify HMAC-SHA256 signature with 5-minute timestamp window & JSON canonicalization
+        // HMAC-SHA256 del cuerpo crudo + ventana de 5 minutos sobre X-Timestamp
         if (!$this->identityProvider->verifyWebhookSignature($rawPayload, $signature, $timestamp)) {
             Log::warning('Didit webhook signature validation failed', [
                 'ip' => $request->ip(),

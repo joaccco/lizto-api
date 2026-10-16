@@ -32,6 +32,13 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- Didit: la suite nunca debe depender del .env del desarrollador
+             ni tocar credenciales reales. DIDIT_WORKFLOW_ID se deja sin fijar
+             a proposito: DiditWorkflowConfigTest verifica que falte. -->
+        <env name="DIDIT_MODE" value=""/>
+        <env name="DIDIT_SANDBOX_SCENARIO" value=""/>
+        <env name="DIDIT_API_KEY" value="test-api-key-no-real"/>
+        <env name="DIDIT_WEBHOOK_SECRET" value="test-webhook-secret-no-real"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

@@ -17,6 +17,7 @@ use App\Models\Identity;
 use App\Models\ProfessionalMVU;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -41,8 +42,9 @@ class DiditOnboardingAndWebhookTest extends TestCase
 
     protected function computeSignature(string $rawPayload, string $timestamp): string
     {
-        $canonical = DiditIdentityProvider::canonicalizeJson($rawPayload);
-        return hash_hmac('sha256', "{$timestamp}:{$canonical}", $this->webhookSecret);
+        // Didit firma el cuerpo crudo con HMAC-SHA256; el timestamp solo
+        // acota la ventana de replay, no entra en la cadena firmada.
+        return hash_hmac('sha256', $rawPayload, $this->webhookSecret);
     }
 
     public function test_onboarding_identity_start_unauthenticated_returns_401(): void
@@ -107,7 +109,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
 
         // Missing timestamp
         $res3 = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => 'fake_sig',
+            'HTTP_X_SIGNATURE' => 'fake_sig',
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
         $res3->assertStatus(401);
@@ -122,7 +124,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
         $timestamp = (string) time();
 
         $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => 'tampered_signature_hex_1234',
+            'HTTP_X_SIGNATURE' => 'tampered_signature_hex_1234',
             'HTTP_X_TIMESTAMP' => $timestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
@@ -142,7 +144,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
         $sig = $this->computeSignature($payload, $expiredTimestamp);
 
         $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => $sig,
+            'HTTP_X_SIGNATURE' => $sig,
             'HTTP_X_TIMESTAMP' => $expiredTimestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
@@ -150,30 +152,81 @@ class DiditOnboardingAndWebhookTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_webhook_canonicalization_against_synthetic_fixture(): void
+    public function test_webhook_accepts_real_didit_payload(): void
     {
-        $fixtureSecret = 'whsec_didit_sandbox_verified_fixture_key';
-        $realProvider = new DiditIdentityProvider(['webhook_secret' => $fixtureSecret]);
+        // Cuerpo CRUDO byte a byte de una entrega real de Didit sandbox
+        // (sesion 68d3a20e-d1f6-4580-8142-351e1e1b0a3b, entrega 660599ab, 2026-10-12).
+        // Reemplaza al fixture sintetico anterior, cuya firma la habia fabricado
+        // el agente y nunca se valido contra Didit.
+        $rawPayload = file_get_contents(base_path('tests/Fixtures/KYC/didit_webhook_real_body.json'));
+
+        $realProvider = new DiditIdentityProvider(['webhook_secret' => $this->webhookSecret]);
         $this->app->instance(IdentityProviderContract::class, $realProvider);
+        Http::fake();
 
-        // Cargar fixture sintético (nota: la firma no está validada contra Didit y el caso real sigue pendiente)
-        $rawPayload = file_get_contents(base_path('tests/Fixtures/KYC/didit_webhook_synthetic.json'));
-        $currentTimestamp = (string) time();
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $rawPayload, $this->webhookSecret);
 
-        // Firma canónica externa esperada sobre el payload sintético
-        $expectedCanonicalString = '{"_disclaimer":"NOTA: Payload sintético generado para pruebas locales de canonicalización. La firma NO está validada contra Didit Sandbox ni Producción. La captura de un webhook real sigue pendiente de un túnel público.","event":"session.verified","session_id":"8b51c148-5fa0-482a-89a7-96a84c987fa2","status":"approved","timestamp":1725782400,"vendor_data":"f47ac10b-58cc-4372-a567-0e02b2c3d479","workflow_id":"1a3cf8eb-1e92-4554-bb91-2017577cf811"}';
-        $literalSignature = hash_hmac('sha256', "{$currentTimestamp}:{$expectedCanonicalString}", $fixtureSecret);
-
-        // Enviar payload sintético crudo desordenado; el controller y provider deben canonicalizarlo
-        // y validar contra la firma esperada externa fija
         $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => $literalSignature,
-            'HTTP_X_TIMESTAMP' => $currentTimestamp,
+            'HTTP_X_SIGNATURE' => $signature,
+            'HTTP_X_TIMESTAMP' => $timestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $rawPayload);
 
-        // No debe retornar 401 Unauthorized
-        $this->assertNotEquals(401, $response->getStatusCode(), 'La canonicalización del payload sintético debe coincidir con la firma esperada.');
+        $this->assertNotEquals(401, $response->getStatusCode(), 'La firma HMAC sobre el cuerpo crudo real de Didit debe validar.');
+    }
+
+    public function test_webhook_signature_over_canonicalized_body_is_rejected(): void
+    {
+        // Regresion: el esquema anterior firmaba "timestamp:json_canonico".
+        // Didit firma el cuerpo crudo, asi que ese esquema debe fallar.
+        $rawPayload = file_get_contents(base_path('tests/Fixtures/KYC/didit_webhook_real_body.json'));
+
+        $realProvider = new DiditIdentityProvider(['webhook_secret' => $this->webhookSecret]);
+        $this->app->instance(IdentityProviderContract::class, $realProvider);
+
+        $timestamp = (string) time();
+        $firmaEsquemaViejo = hash_hmac('sha256', "{$timestamp}:{$rawPayload}", $this->webhookSecret);
+
+        $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
+            'HTTP_X_SIGNATURE' => $firmaEsquemaViejo,
+            'HTTP_X_TIMESTAMP' => $timestamp,
+            'CONTENT_TYPE' => 'application/json',
+        ], $rawPayload);
+
+        $response->assertStatus(401);
+    }
+
+    public function test_webhook_with_non_uuid_vendor_data_returns_200_not_500(): void
+    {
+        // Regresion de un 500 real (12-10): users.uuid es de tipo uuid en
+        // Postgres, y consultarla con texto que no es un UUID lanzaba
+        // SQLSTATE[22P02]. Didit reintenta los 500 para siempre, asi que un
+        // solo vendor_data mal formado generaba un bucle de reintentos.
+        $realProvider = Mockery::mock(IdentityProviderContract::class);
+        $this->app->instance(IdentityProviderContract::class, $realProvider);
+
+        $realProvider->shouldReceive('verifyWebhookSignature')->andReturn(true);
+        $realProvider
+            ->shouldReceive('getDecision')
+            ->once()
+            ->with('sess_vendor_data_invalido')
+            ->andReturn([
+                'session_id' => 'sess_vendor_data_invalido',
+                'status' => 'Approved',
+                'vendor_data' => 'lizto-prueba-webhook-2', // no es un UUID
+            ]);
+
+        $payload = json_encode(['session_id' => 'sess_vendor_data_invalido']);
+
+        $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
+            'HTTP_X_SIGNATURE' => 'valid_sig',
+            'HTTP_X_TIMESTAMP' => (string) time(),
+            'CONTENT_TYPE' => 'application/json',
+        ], $payload);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('status', 'not_found');
     }
 
     public function test_webhook_valid_signature_fetches_decision_and_approves_identity_and_is_idempotent(): void
@@ -220,7 +273,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
 
         // First webhook delivery
         $res1 = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => 'valid_sig',
+            'HTTP_X_SIGNATURE' => 'valid_sig',
             'HTTP_X_TIMESTAMP' => $timestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
@@ -241,7 +294,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
 
         // Second delivery (duplicate / retry) -> Idempotency
         $res2 = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => 'valid_sig',
+            'HTTP_X_SIGNATURE' => 'valid_sig',
             'HTTP_X_TIMESTAMP' => $timestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
@@ -315,7 +368,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
         $timestamp = (string) time();
 
         $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => 'valid_sig',
+            'HTTP_X_SIGNATURE' => 'valid_sig',
             'HTTP_X_TIMESTAMP' => $timestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
@@ -400,7 +453,7 @@ class DiditOnboardingAndWebhookTest extends TestCase
         $timestamp = (string) time();
 
         $response = $this->call('POST', '/api/v1/webhooks/didit/identity-verified', [], [], [], [
-            'HTTP_X_SIGNATURE_V2' => 'valid_sig',
+            'HTTP_X_SIGNATURE' => 'valid_sig',
             'HTTP_X_TIMESTAMP' => $timestamp,
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
