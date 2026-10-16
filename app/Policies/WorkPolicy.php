@@ -41,6 +41,20 @@ class WorkPolicy
         return $work->client_id === $user->id;
     }
 
+    public function update(UserModel $user, WorkModel $work): bool
+    {
+        if ((int) $work->client_id === (int) $user->id) {
+            return true;
+        }
+
+        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
+        if ($providerProfile && (int) $work->provider_id === (int) $providerProfile->id) {
+            return true;
+        }
+
+        return false;
+    }
+
     public function submitFinalQuote(UserModel $user, WorkModel $work): bool
     {
         $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();

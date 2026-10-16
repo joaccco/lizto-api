@@ -57,4 +57,18 @@ class ServiceRequestPolicy
 
         return false;
     }
+
+    public function decline(UserModel $user, ServiceRequestModel $serviceRequest): bool
+    {
+        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
+        if (!$providerProfile || !$providerProfile->isIdentityVerified()) {
+            return false;
+        }
+
+        return $serviceRequest->matchSession()
+            ->whereHas('cards', function ($q) use ($providerProfile) {
+                $q->where('provider_id', $providerProfile->id)
+                  ->where('card_status', '!=', \App\Domain\Matching\Enums\CardStatus::Rejected);
+            })->exists();
+    }
 }

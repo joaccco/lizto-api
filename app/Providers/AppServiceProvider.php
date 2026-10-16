@@ -5,7 +5,9 @@ namespace App\Providers;
 use App\Infrastructure\Persistence\Eloquent\ConversationModel;
 use App\Infrastructure\Persistence\Eloquent\ServiceRequestModel;
 use App\Infrastructure\Persistence\Eloquent\WorkModel;
+use App\Infrastructure\Persistence\Eloquent\OfferModel;
 use App\Policies\ConversationPolicy;
+use App\Policies\OfferPolicy;
 use App\Policies\ServiceRequestPolicy;
 use App\Policies\WorkPolicy;
 use Illuminate\Support\Facades\Gate;
@@ -37,6 +39,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ServiceRequestModel::class, ServiceRequestPolicy::class);
         Gate::policy(WorkModel::class, WorkPolicy::class);
         Gate::policy(ConversationModel::class, ConversationPolicy::class);
+        Gate::policy(OfferModel::class, OfferPolicy::class);
 
         \Illuminate\Support\Facades\Event::subscribe(
             \App\Application\Notifications\Listeners\PushNotificationSubscriber::class

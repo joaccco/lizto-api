@@ -206,6 +206,8 @@ class WorkController extends Controller
             return response()->json(['message' => 'Trabajo no encontrado.'], 404);
         }
 
+        \Illuminate\Support\Facades\Gate::authorize('update', $work);
+
         $validated = $request->validate([
             'scheduled_at' => 'nullable|date',
             'estimated_duration_min' => 'nullable|integer|min:15|max:480',

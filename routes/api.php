@@ -120,31 +120,34 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('/kyc/documents/{uuid}/signed-url', [\App\Http\Controllers\Api\V1\Kyc\KycDocumentController::class, 'signedUrl'])->name('kyc.documents.signed-url');
         Route::delete('/kyc/documents/{uuid}', [\App\Http\Controllers\Api\V1\Kyc\KycDocumentController::class, 'destroy'])->name('kyc.documents.destroy');
 
-        // Admin KYC Verification
-        Route::post('/admin/kyc/documents/{uuid}/verify', [\App\Http\Controllers\Api\V1\Admin\AdminKycController::class, 'verify'])->name('admin.kyc.verify');
-        Route::post('/admin/kyc/documents/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminKycController::class, 'reject'])->name('admin.kyc.reject');
-
-        // Admin Verification Panel
-        Route::get('/admin/providers/pending', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'pending'])->name('admin.providers.pending');
-        Route::get('/admin/providers/{uuid}', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'show'])->name('admin.providers.show');
-        Route::post('/admin/providers/{uuid}/verify', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'verify'])->name('admin.providers.verify');
-        Route::post('/admin/providers/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reject'])->name('admin.providers.reject');
-        Route::post('/admin/providers/{uuid}/suspend', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'suspend'])->name('admin.providers.suspend');
-        Route::post('/admin/providers/{uuid}/reactivate', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reactivate'])->name('admin.providers.reactivate');
-
         // Onboarding Identity (Didit KYC)
         Route::prefix('onboarding/identity')->name('onboarding.identity.')->group(function () {
             Route::post('/start', [\App\Http\Controllers\Api\V1\Onboarding\IdentityController::class, 'start'])->name('start');
             Route::get('/status', [\App\Http\Controllers\Api\V1\Onboarding\IdentityController::class, 'status'])->name('status');
         });
 
-        // Admin MVU (Professional Verification Panel)
-        Route::prefix('admin/mvu')->name('admin.mvu.')->group(function () {
-            Route::get('/pending', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'pending'])->name('pending');
-            Route::get('/{id}', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'show'])->name('show');
-            Route::post('/{id}/approve', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'approve'])->name('approve');
-            Route::post('/{id}/reject', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'reject'])->name('reject');
-            Route::post('/{id}/request-data', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'requestData'])->name('request-data');
+        // Admin Surface (SEC-06)
+        Route::prefix('admin')->name('admin.')->middleware([\App\Http\Middleware\EnsureUserIsAdmin::class])->group(function () {
+            // Admin KYC Verification
+            Route::post('/kyc/documents/{uuid}/verify', [\App\Http\Controllers\Api\V1\Admin\AdminKycController::class, 'verify'])->name('kyc.verify');
+            Route::post('/kyc/documents/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminKycController::class, 'reject'])->name('kyc.reject');
+
+            // Admin Verification Panel
+            Route::get('/providers/pending', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'pending'])->name('providers.pending');
+            Route::get('/providers/{uuid}', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'show'])->name('providers.show');
+            Route::post('/providers/{uuid}/verify', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'verify'])->name('providers.verify');
+            Route::post('/providers/{uuid}/reject', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reject'])->name('providers.reject');
+            Route::post('/providers/{uuid}/suspend', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'suspend'])->name('providers.suspend');
+            Route::post('/providers/{uuid}/reactivate', [\App\Http\Controllers\Api\V1\Admin\AdminProviderController::class, 'reactivate'])->name('providers.reactivate');
+
+            // Admin MVU (Professional Verification Panel)
+            Route::prefix('mvu')->name('mvu.')->group(function () {
+                Route::get('/pending', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'pending'])->name('pending');
+                Route::get('/{id}', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'show'])->name('show');
+                Route::post('/{id}/approve', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'approve'])->name('approve');
+                Route::post('/{id}/reject', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'reject'])->name('reject');
+                Route::post('/{id}/request-data', [\App\Http\Controllers\Api\V1\Admin\MVUController::class, 'requestData'])->name('request-data');
+            });
         });
     });
 

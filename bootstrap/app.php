@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             \App\Http\Middleware\CorrelationIdMiddleware::class,
             \App\Http\Middleware\StructuredLoggingMiddleware::class,
+            \App\Http\Middleware\EnsureAdminRouteAccess::class,
+        ]);
+        $middleware->alias([
+            'role.admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

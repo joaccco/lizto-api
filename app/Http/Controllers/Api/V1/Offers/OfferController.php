@@ -148,6 +148,7 @@ class OfferController extends Controller
     public function counter(Request $request, string $id): JsonResponse
     {
         $offer = OfferModel::where('uuid', $id)->firstOrFail();
+        \Illuminate\Support\Facades\Gate::authorize('counter', $offer);
         $maxRounds = config('offers.max_offer_rounds', 3);
 
         if ($offer->round_number >= $maxRounds) {
@@ -184,6 +185,7 @@ class OfferController extends Controller
     public function accept(string $id): JsonResponse
     {
         $offer = OfferModel::where('uuid', $id)->firstOrFail();
+        \Illuminate\Support\Facades\Gate::authorize('accept', $offer);
 
         if (!$offer->provider || !$offer->provider->isIdentityVerified()) {
             return response()->json(['message' => 'El profesional que realizó esta oferta ya no cuenta con identidad verificada.'], 403);
@@ -208,6 +210,7 @@ class OfferController extends Controller
     public function reject(Request $request, string $id): JsonResponse
     {
         $offer = OfferModel::where('uuid', $id)->firstOrFail();
+        \Illuminate\Support\Facades\Gate::authorize('reject', $offer);
         $validated = $request->validate([
             'reason' => 'nullable|string|in:price_too_high,unavailable,other',
         ]);
@@ -233,6 +236,7 @@ class OfferController extends Controller
     public function askQuestion(Request $request, string $id): JsonResponse
     {
         $offer = OfferModel::where('uuid', $id)->firstOrFail();
+        \Illuminate\Support\Facades\Gate::authorize('askQuestion', $offer);
         $validated = $request->validate([
             'question_key' => 'required|string',
             'question_text' => 'required|string',
@@ -258,7 +262,16 @@ class OfferController extends Controller
 
     public function answerQuestion(Request $request, int $questionId): JsonResponse
     {
-        $offerQuestion = OfferQuestionModel::findOrFail($questionId);
+        $offerQuestion = OfferQuestionModel::with('offer.serviceRequest', 'offer.provider')->findOrFail($questionId);
+        $offer = $offerQuestion->offer;
+        $user = $request->user();
+        $isClient = $offer?->serviceRequest && (int) $offer->serviceRequest->client_id === (int) $user->id;
+        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
+        $isProvider = $offer?->provider_id && $providerProfile && (int) $offer->provider_id === (int) $providerProfile->id;
+        if (!$isClient && !$isProvider) {
+            throw new \Illuminate\Auth\Access\AuthorizationException();
+        }
+
         $validated = $request->validate([
             'answer' => 'required|string',
         ]);
