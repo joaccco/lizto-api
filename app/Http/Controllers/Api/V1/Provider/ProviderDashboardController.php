@@ -63,6 +63,10 @@ class ProviderDashboardController extends Controller
 
         $categoryIds = $providerProfile->categories()->pluck('category_id')->filter()->toArray();
 
+        // Instrumento de diagnostico para pruebas manuales. Lista blanca explicita:
+        // cualquier entorno que no sea local o testing NO lo recibe. Falla cerrado.
+        $debugEnabled = app()->environment(['local', 'testing']);
+
         $requests = ServiceRequestModel::query()
             ->whereNotIn('status', [
                 \App\Domain\ServiceRequests\Enums\RequestStatus::PendingSurvey,
@@ -74,7 +78,8 @@ class ProviderDashboardController extends Controller
             })
             ->where(function ($query) use ($providerProfile, $categoryIds) {
                 $query->whereHas('matchSession.cards', function ($q) use ($providerProfile) {
-                    $q->where('provider_id', $providerProfile->id);
+                    $q->where('provider_id', $providerProfile->id)
+                      ->where('card_status', '!=', \App\Domain\Matching\Enums\CardStatus::Rejected);
                 })
                 ->orWhereHas('works', function ($q) use ($providerProfile) {
                     $q->where('provider_id', $providerProfile->id);
@@ -90,11 +95,18 @@ class ProviderDashboardController extends Controller
             ->with(['category', 'client', 'works' => function ($q) use ($providerProfile) {
                 $q->where('provider_id', $providerProfile->id)->with('conversation');
             }])
+            ->when($debugEnabled, function ($q) use ($providerProfile) {
+                // Solo en desarrollo: se necesita la tarjeta de matching de ESTE
+                // profesional para poder explicar por que aparece cada pedido.
+                $q->with(['matchSession.cards' => function ($c) use ($providerProfile) {
+                    $c->where('provider_id', $providerProfile->id);
+                }]);
+            })
             ->orderByDesc('created_at')
             ->limit(10)
             ->get();
 
-        $items = $requests->map(function ($sr) use ($user) {
+        $items = $requests->map(function ($sr) use ($user, $providerProfile, $debugEnabled) {
             $work = $sr->works->first();
             $effectiveStatus = $work ? $work->status->value : ($sr->status instanceof \BackedEnum ? $sr->status->value : $sr->status);
             $locationData = \App\Domain\Location\Services\LocationPresenter::present($sr, $user);
@@ -112,10 +124,57 @@ class ProviderDashboardController extends Controller
                 'estimated_duration_min' => $work?->estimated_duration_min,
                 'created_at' => $sr->created_at?->toISOString(),
                 'schedule' => static::formatScheduleBlock($sr),
-            ], $locationData);
+            ], $locationData, static::debugAttribution($sr, $providerProfile, $work, $debugEnabled));
         });
 
         return response()->json(['data' => $items]);
+    }
+
+    /**
+     * Por que este pedido aparece en la bandeja de ESTE profesional.
+     *
+     * La consulta de `workRequests` tiene tres ramas unidas por OR, y sólo dos
+     * significan que el pedido es suyo. La tercera son pedidos abiertos de su
+     * rubro que todavia no tienen a nadie invitado: aparecen en la bandeja de
+     * TODOS los profesionales de ese rubro. Sin esto no hay forma de
+     * distinguirlos mirando la pantalla.
+     *
+     * Solo se emite en local y testing.
+     */
+    protected static function debugAttribution($sr, $providerProfile, $work, bool $enabled): array
+    {
+        if (!$enabled) {
+            return [];
+        }
+
+        $card = $sr->relationLoaded('matchSession') && $sr->matchSession
+            ? $sr->matchSession->cards->first()
+            : null;
+
+        if ($work) {
+            $motivo = 'trabajo_asignado';
+            $explicacion = 'Tenés un trabajo asignado en este pedido.';
+        } elseif ($card) {
+            $motivo = 'tarjeta_de_matching';
+            $explicacion = 'Fuiste invitado a este pedido.';
+        } else {
+            $motivo = 'rubro_abierto';
+            $explicacion = 'NO es tuyo: aparece sólo porque es de tu rubro y todavía no hay nadie invitado.';
+        }
+
+        return [
+            '_debug' => [
+                'motivo' => $motivo,
+                'explicacion' => $explicacion,
+                'es_mio' => $motivo !== 'rubro_abierto',
+                'provider_id' => $providerProfile->id,
+                'provider_nombre' => $providerProfile->user?->name,
+                'card_status' => $card?->card_status instanceof \BackedEnum
+                    ? $card->card_status->value
+                    : $card?->card_status,
+                'request_uuid' => $sr->uuid,
+            ],
+        ];
     }
 
     public function agenda(Request $request): JsonResponse
@@ -412,16 +471,32 @@ class ProviderDashboardController extends Controller
         }
     }
 
-    public function declineWorkRequest(string $id): JsonResponse
+    public function declineWorkRequest(string $id, Request $request): JsonResponse
     {
         $serviceRequest = $this->findByUuid(ServiceRequestModel::class, $id);
         if (!$serviceRequest) {
             return response()->json(['message' => 'Recurso no encontrado.'], 404);
         }
 
-        \Illuminate\Support\Facades\Gate::authorize('respond', $serviceRequest);
+        \Illuminate\Support\Facades\Gate::authorize('decline', $serviceRequest);
 
-        $serviceRequest->transitionTo(\App\Domain\ServiceRequests\Enums\RequestStatus::Cancelled);
+        $user = $request->user();
+        $providerProfile = ProviderProfileModel::where('user_id', $user->id)->first();
+
+        if ($providerProfile) {
+            $card = \App\Infrastructure\Persistence\Eloquent\MatchCardModel::whereHas('matchSession', function ($q) use ($serviceRequest) {
+                $q->where('service_request_id', $serviceRequest->id);
+            })
+            ->where('provider_id', $providerProfile->id)
+            ->first();
+
+            if ($card) {
+                $card->update([
+                    'card_status' => \App\Domain\Matching\Enums\CardStatus::Rejected,
+                    'decided_at' => now(),
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Solicitud declinada.',
